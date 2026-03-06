@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NedCard Intelligence — System Blueprint</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --green:   #007B40;
+    --green2:  #00C66A;
+    --amber:   #C9A84C;
+    --red:     #E74C3C;
+    --blue:    #3498DB;
+    --purple:  #9B59B6;
+    --dark:    #0D1117;
+    --dark2:   #161B22;
+    --dark3:   #21262D;
+    --border:  rgba(255,255,255,0.07);
+    --muted:   #8B949E;
+    --text:    #E6EDF3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--dark); color: var(--text); line-height: 1.7; font-size: 15px; }
+  a { color: var(--green2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: 'JetBrains Mono', monospace; }
+
+  @media print {
+    body { background: #fff; color: #111; font-size: 12px; }
+    .cover { background: #007B40 !important; -webkit-print-color-adjust: exact; }
+    .cover * { color: #fff !important; }
+    .no-print { display: none; }
+    .sidebar { display: none; }
+    .main-content { margin-left: 0 !important; }
+    pre, code { background: #f4f4f4 !important; color: #111 !important; }
+    .card { border: 1px solid #ccc !important; background: #fafafa !important; }
+  }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(135deg, #003d20 0%, #007B40 55%, #00C66A14 100%);
+    padding: 80px 90px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 85% 40%, rgba(0,198,106,0.12), transparent 55%),
+      radial-gradient(circle at 10% 80%, rgba(0,123,64,0.18), transparent 40%);
+  }
+  .cover-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .cover h1 {
+    font-size: clamp(30px, 5vw, 54px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -1.5px;
+    color: #fff;
+    position: relative;
+    max-width: 680px;
+  }
+  .cover h1 span { color: var(--green2); }
+  .cover-sub {
+    margin-top: 22px;
+    font-size: 15px;
+    color: rgba(255,255,255,0.62);
+    max-width: 580px;
+    position: relative;
+    line-height: 1.65;
+  }
+  .cover-meta {
+    margin-top: 44px;
+    display: flex;
+    gap: 36px;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .cover-meta-item { font-size: 12px; color: rgba(255,255,255,0.4); }
+  .cover-meta-item strong { color: rgba(255,255,255,0.82); display: block; font-size: 13.5px; margin-bottom: 1px; }
+
+  /* ── Layout: sidebar + main ── */
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--dark2);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 32px 0 48px;
+  }
+  .sidebar-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 24px;
+    margin-bottom: 12px;
+  }
+  .nav-section { margin-bottom: 4px; }
+  .nav-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: rgba(139,148,158,0.6);
+    padding: 12px 24px 4px;
+  }
+  .nav-link {
+    display: block;
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 5px 24px;
+    transition: color 0.15s, background 0.15s;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+  .nav-link:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.04);
+    text-decoration: none;
+  }
+  .nav-link.active {
+    color: var(--green2);
+    border-left-color: var(--green2);
+    background: rgba(0,198,106,0.06);
+  }
+  .nav-link code {
+    font-size: 11px;
+    color: inherit;
+  }
+
+  .main-content {
+    flex: 1;
+    min-width: 0;
+    padding: 56px 56px 120px;
+    max-width: 900px;
+  }
+
+  /* ── Sections ── */
+  .section { margin-bottom: 72px; scroll-margin-top: 24px; }
+
+  h2 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+    color: #fff;
+    margin-bottom: 8px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  h2 .section-num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    margin: 36px 0 10px;
+    letter-spacing: -0.3px;
+  }
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(230,237,243,0.85);
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 11px;
+  }
+  p { color: rgba(230,237,243,0.82); margin-bottom: 12px; line-height: 1.72; }
+
+  /* ── File cards ── */
+  .file-grid { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+
+  .file-card {
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .file-card:hover {
+    border-color: rgba(255,255,255,0.14);
+    box-shadow: 0 4px 28px rgba(0,0,0,0.35);
+  }
+  .file-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .file-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .fi-py   { background: rgba(52,152,219,0.14); border: 1px solid rgba(52,152,219,0.2); }
+  .fi-ts   { background: rgba(0,198,106,0.12);  border: 1px solid rgba(0,198,106,0.2); }
+  .fi-tsx  { background: rgba(155,89,182,0.12); border: 1px solid rgba(155,89,182,0.2); }
+  .fi-cfg  { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.2); }
+  .fi-data { background: rgba(231,76,60,0.12);  border: 1px solid rgba(231,76,60,0.2); }
+  .fi-sql  { background: rgba(0,123,64,0.16);   border: 1px solid rgba(0,123,64,0.25); }
+
+  .file-card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: #e6edf3;
+    margin-bottom: 3px;
+  }
+  .file-card-path {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .file-card-body { padding: 14px 20px 16px; }
+  .file-card-body p { font-size: 13.5px; margin-bottom: 0; }
+
+  .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+  }
+  .b-critical { background: rgba(231,76,60,0.15); color: #e07060; border: 1px solid rgba(231,76,60,0.25); }
+  .b-important { background: rgba(201,168,76,0.14); color: var(--amber); border: 1px solid rgba(201,168,76,0.25); }
+  .b-optional { background: rgba(139,148,158,0.12); color: var(--muted); border: 1px solid rgba(139,148,158,0.2); }
+  .b-green { background: rgba(0,198,106,0.12); color: var(--green2); border: 1px solid rgba(0,198,106,0.22); }
+  .b-blue { background: rgba(52,152,219,0.12); color: #7eb8df; border: 1px solid rgba(52,152,219,0.22); }
+  .b-purple { background: rgba(155,89,182,0.12); color: #b07ee0; border: 1px solid rgba(155,89,182,0.22); }
+
+  /* ── Code blocks ── */
+  pre {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #e6edf3;
+    overflow-x: auto;
+    margin: 14px 0;
+    white-space: pre;
+  }
+  .hl-green  { color: var(--green2); }
+  .hl-amber  { color: var(--amber); }
+  .hl-blue   { color: #7eb8df; }
+  .hl-muted  { color: var(--muted); }
+  .hl-red    { color: #e07060; }
+  .hl-purple { color: #b07ee0; }
+
+  /* ── Flow diagram ── */
+  .flow-box {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: #c6ced8;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  /* ── Tables ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 14px 0;
+  }
+  .data-table th {
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: rgba(230,237,243,0.82);
+    vertical-align: top;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .data-table td code {
+    font-size: 11.5px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13.5px;
+    line-height: 1.62;
+    margin: 16px 0;
+    color: rgba(230,237,243,0.85);
+  }
+  .callout-red    { background: rgba(231,76,60,0.07); border: 1px solid rgba(231,76,60,0.2); border-left: 3px solid #E74C3C; }
+  .callout-amber  { background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.2); border-left: 3px solid var(--amber); }
+  .callout-green  { background: rgba(0,198,106,0.06); border: 1px solid rgba(0,198,106,0.18); border-left: 3px solid var(--green2); }
+  .callout-blue   { background: rgba(52,152,219,0.07); border: 1px solid rgba(52,152,219,0.2); border-left: 3px solid #3498DB; }
+  .callout strong { font-weight: 700; }
+  .callout-red strong    { color: #e07060; }
+  .callout-amber strong  { color: var(--amber); }
+  .callout-green strong  { color: var(--green2); }
+  .callout-blue strong   { color: #7eb8df; }
+
+  /* ── Section dividers ── */
+  .section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--green2)44, transparent);
+    margin: 56px 0;
+    border: none;
+  }
+
+  /* ── Print button ── */
+  .print-btn {
+    position: fixed;
+    bottom: 32px; right: 32px;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 999;
+  }
+  .print-btn:hover { background: var(--green2); color: #000; }
+
+  /* ── Scrollbar ── */
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     COVER
+════════════════════════════════════════════════ -->
+<div class="cover">
+  <p class="cover-eyebrow">NedCard Intelligent Suite · Builder Reference</p>
+  <h1>System <span>Blueprint</span></h1>
+  <p class="cover-sub">
+    A component-by-component guide to every file in the codebase — what it does, why it exists,
+    what breaks when it is missing, and how it connects to everything else.
+    Written for engineers, architects, and anyone building on top of this system.
+  </p>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><strong>3 March 2026</strong>Last updated</div>
+    <div class="cover-meta-item"><strong>FastAPI + LangGraph</strong>Backend runtime</div>
+    <div class="cover-meta-item"><strong>React 18 + TypeScript</strong>Production frontend</div>
+    <div class="cover-meta-item"><strong>Streamlit</strong>Rapid prototype frontend</div>
+    <div class="cover-meta-item"><strong>SQLite → PostgreSQL</strong>Data layer</div>
+    <div class="cover-meta-item"><strong>MLflow 3</strong>Observability</div>
+    <div class="cover-meta-item"><strong>RAG + Whisper Pipeline</strong>Document &amp; audio intelligence</div>
+    <div class="cover-meta-item"><strong>TTS (Nova voice)</strong>AI speech readback</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     LAYOUT
+════════════════════════════════════════════════ -->
+<div class="layout">
+
+  <!-- SIDEBAR NAV -->
+  <nav class="sidebar no-print">
+    <p class="sidebar-title">Sections</p>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Overview</p>
+      <a href="#what-is-it" class="nav-link">What this system is</a>
+      <a href="#query-flow" class="nav-link">Query flow diagram</a>
+      <a href="#domains" class="nav-link">Four intelligence domains</a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Root</p>
+      <a href="#root-env" class="nav-link"><code>.env</code></a>
+      <a href="#root-makefile" class="nav-link"><code>Makefile</code></a>
+      <a href="#root-pyproject" class="nav-link"><code>pyproject.toml</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Backend Core</p>
+      <a href="#be-main" class="nav-link"><code>main.py</code></a>
+      <a href="#be-config" class="nav-link"><code>config.py</code></a>
+      <a href="#be-base-graph" class="nav-link"><code>base_graph.py</code></a>
+      <a href="#be-agents" class="nav-link">Agent files</a>
+      <a href="#be-agent-utils" class="nav-link"><code>_agent_utils.py</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Backend Routers</p>
+      <a href="#be-unified" class="nav-link"><code>unified.py</code> ★</a>
+      <a href="#be-domain-routers" class="nav-link">Domain routers</a>
+      <a href="#be-schemas" class="nav-link"><code>responses.py</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Backend Tools</p>
+      <a href="#tools-sql" class="nav-link"><code>sql_tools.py</code></a>
+      <a href="#tools-chart" class="nav-link"><code>chart_tools.py</code></a>
+      <a href="#tools-sentiment" class="nav-link"><code>sentiment_tools.py</code></a>
+      <a href="#tools-whisper" class="nav-link"><code>whisper_tools.py</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Backend DB</p>
+      <a href="#db-session" class="nav-link"><code>session.py</code></a>
+      <a href="#db-models" class="nav-link"><code>models.py</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">RAG &amp; Documents</p>
+      <a href="#rag-overview" class="nav-link">RAG module overview</a>
+      <a href="#rag-parser" class="nav-link"><code>parser.py</code></a>
+      <a href="#rag-embedder" class="nav-link"><code>embedder.py</code></a>
+      <a href="#rag-store" class="nav-link"><code>store.py</code></a>
+      <a href="#rag-router" class="nav-link"><code>documents.py</code> ★</a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Backend Evals</p>
+      <a href="#evals-overview" class="nav-link">Eval framework</a>
+      <a href="#evals-metrics" class="nav-link"><code>metrics.py</code></a>
+      <a href="#evals-dataset" class="nav-link"><code>dataset.py</code></a>
+      <a href="#evals-harness" class="nav-link"><code>harness.py</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">React Frontend</p>
+      <a href="#ui-main" class="nav-link"><code>main.tsx</code></a>
+      <a href="#ui-app" class="nav-link"><code>App.tsx</code></a>
+      <a href="#ui-types" class="nav-link"><code>types/index.ts</code></a>
+      <a href="#ui-api" class="nav-link"><code>lib/api.ts</code></a>
+      <a href="#ui-auth" class="nav-link"><code>AuthContext.tsx</code></a>
+      <a href="#ui-history" class="nav-link"><code>ChatHistoryContext.tsx</code></a>
+      <a href="#ui-chatpage" class="nav-link"><code>ChatPage.tsx</code> ★</a>
+      <a href="#ui-dynamicchart" class="nav-link"><code>DynamicChart.tsx</code></a>
+      <a href="#ui-messagebubble" class="nav-link"><code>MessageBubble.tsx</code></a>
+      <a href="#ui-vite" class="nav-link"><code>vite.config.ts</code></a>
+      <a href="#ui-tailwind" class="nav-link"><code>tailwind.config.js</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Streamlit Frontend</p>
+      <a href="#sl-app" class="nav-link"><code>app.py</code></a>
+      <a href="#sl-api" class="nav-link"><code>api_client.py</code></a>
+      <a href="#sl-pages" class="nav-link">Pages</a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Data</p>
+      <a href="#data-generators" class="nav-link">Generators</a>
+      <a href="#data-seed" class="nav-link"><code>seed_db.py</code></a>
+      <a href="#data-db" class="nav-link"><code>dev.db</code></a>
+    </div>
+
+    <div class="nav-section">
+      <p class="nav-section-label">Infra &amp; Docs</p>
+      <a href="#infra" class="nav-link">Docker / Kubernetes</a>
+      <a href="#docs-html" class="nav-link">HTML docs</a>
+      <a href="#how-to-start" class="nav-link">How to start</a>
+      <a href="#glossary" class="nav-link">Glossary</a>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- ════════════════════════════════
+         WHAT IS THIS SYSTEM
+    ═════════════════════════════════ -->
+    <div class="section" id="what-is-it">
+      <h2><span class="section-num">01 — Overview</span>What this system is</h2>
+
+      <p>
+        <strong>NedCard Intelligent Suite</strong> is a production-ready, multi-agent AI platform
+        that lets Nedbank analysts ask questions about credit applications, fraud transactions,
+        social sentiment, and call-centre performance — in plain English — and receive intelligent,
+        data-grounded answers in seconds.
+      </p>
+      <p>
+        The AI does not answer from training memory. It actively <strong>uses tools</strong> —
+        querying a real database, transcribing audio, fetching social posts — then reasons about
+        what it finds. This <em>think → act → observe → repeat</em> pattern is called a
+        <strong>ReAct loop</strong> and is managed by <strong>LangGraph</strong>.
+      </p>
+
+      <div class="flow-box"><span class="hl-green">User</span>: "Which branches have the worst decline rates, and is there a link to fraud?"
+        │
+        ▼
+<span class="hl-amber">Unified Router</span> classifies intent → fans out to Credit + Fraud agents (parallel)
+        │
+        ▼
+<span class="hl-blue">LangGraph agents</span> query the database → reason → produce answers
+        │
+        ▼
+<span class="hl-purple">GPT-4o synthesis</span> merges both answers into one coherent response
+        │
+        ▼
+<span class="hl-green">Frontend</span> renders: domain badge → chart (above text) → animated answer</div>
+
+      <div class="callout callout-green">
+        <strong>Two frontends, one backend.</strong> The React NedCard UI (port 3002) is the production-grade interface.
+        The Streamlit app (port 8501) is the rapid-prototype demo interface. Both talk to the same FastAPI backend on port 8000.
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         QUERY FLOW
+    ═════════════════════════════════ -->
+    <div class="section" id="query-flow">
+      <h2><span class="section-num">02 — Architecture</span>Complete query flow</h2>
+
+      <pre><span class="hl-muted">── ChatPage.tsx ─────────────────────────────────────────────────────────</span>
+User types in textarea
+toggleRecording() → MediaRecorder (audio/webm) → setAttachedFile()     [NEW]
+handleFileChange() → setAttachedFile(file)
+submit(query) →
+
+  <span class="hl-amber">PATH A — file attached</span>                                               [NEW]
+    uploadDocument(file) → POST /api/documents/upload
+      ├─ doc/audio? → extract_text() / extract_audio() (Whisper-1)
+      ├─ chunk → embed (ada-002) → SQLite rag tables
+      └─ GPT-4o summary / call-analysis report
+    if question typed   → queryDocument(docId, question) [RAG Q&amp;A only]
+    if no question      → display auto-summary
+    → sets activeDocId + activeDocName banner
+
+  <span class="hl-blue">PATH B — active document</span>                                             [NEW]
+    queryDocument(activeDocId, question) → POST /api/documents/{id}/query
+      ├─ embed question → cosine search → top-k chunks
+      └─ GPT-4o grounded answer (call RAG or standard RAG system prompt)
+
+  <span class="hl-green">PATH C — normal unified query</span>
+    POST /api/unified/query
+
+Speaker button on every completed AI message → handleSpeak()            [STREAMING]
+  → fetch POST /api/speech/tts (raw fetch, not axios)
+  → MediaSource + SourceBuffer: audio.play() on first 4 KB chunk (~0.5-1s TTFA)
+  Backend: _stream_tts() async generator → with_streaming_response → iter_bytes(4096)
+  Fallback: full Blob → Audio.play() on Safari
+
+<span class="hl-muted">── unified.py (_classify) ───────────────────────────────────────────────</span>
+Conversational? ("Hi", "Thanks")
+  YES → <span class="hl-green">_conversational_reply()</span>  ← direct OpenAI call, ~50ms
+         agent_label = null         ← badge hidden in UI
+  NO  → Which domain(s)?
+          fraud keywords   → <span class="hl-red">fraud_sql_graph</span>
+          sentiment words  → <span class="hl-blue">sentiment_graph</span>
+          speech keywords  → <span class="hl-purple">speech_graph</span>
+          credit signals   → <span class="hl-green">credit_sql_graph</span>
+          ≥2 domains       → <span class="hl-amber">asyncio.gather(...)</span>  parallel fan-out
+
+<span class="hl-muted">── _agent_utils.py (invoke_agent) ───────────────────────────────────────</span>
+mlflow.start_span("agent:credit-sql")
+  graph.ainvoke(initial_state)
+    ┌─ LangGraph ReAct loop ──────────────────────────────────┐
+    │  agent node: GPT-4o decides what to do                  │
+    │    ├─ needs schema?  → get_credit_schema()    [TOOL]    │
+    │    ├─ needs data?    → execute_credit_sql()   [TOOL]    │
+    │    ├─ needs chart?   → execute_credit_sql_chart() [TOOL]│
+    │    └─ enough info?   → END                              │
+    └─────────────────────────────────────────────────────────┘
+  extract_chart_from_messages()   ← scan for __CHART__:{...}:__ENDCHART__
+  compute_inline_scores()         ← sql_valid, sql_safe, answer_quality
+  mlflow.update_current_trace()   ← log everything
+
+<span class="hl-muted">── AgentResponse ────────────────────────────────────────────────────────</span>
+{ answer, sql_query, table_data, chart_data, latency_ms,
+  eval_scores, agent_label }
+
+<span class="hl-muted">── ChatPage.tsx (render) ────────────────────────────────────────────────</span>
+if agent_label → domain pill ("Credit Intelligence")
+if chart_data  → &lt;DynamicChart&gt; (ABOVE message bubble)
+                 → GenericChartCard with "Full view" button
+                 → FullscreenModal via createPortal(document.body)
+&lt;MessageBubble&gt; typewriter animation at 6 chars / 16ms</pre>
+    </div>
+
+    <!-- ════════════════════════════════
+         FOUR DOMAINS
+    ═════════════════════════════════ -->
+    <div class="section" id="domains">
+      <h2><span class="section-num">03 — Domains</span>The four intelligence domains</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Domain</th><th>Agent file</th><th>Data table</th><th>Rows</th><th>What it answers</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:var(--green2)">Credit Intelligence</strong></td>
+            <td><code>credit_sql_agent.py</code></td>
+            <td><code>credit_applications</code></td>
+            <td>500</td>
+            <td>Loan applications, approval/decline rates, credit scores, branch performance, decline reasons</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#e07060">Fraud Intelligence</strong></td>
+            <td><code>fraud_sql_agent.py</code></td>
+            <td><code>fraud_transactions</code></td>
+            <td>300</td>
+            <td>Fraud patterns, risk scores, merchant categories, financial exposure</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#7eb8df">Social Sentiment</strong></td>
+            <td><code>sentiment_agent.py</code></td>
+            <td><code>social_posts</code></td>
+            <td>400</td>
+            <td>Customer opinion on X/LinkedIn, brand perception, complaint themes, topic trends</td>
+          </tr>
+          <tr>
+            <td><strong style="color:#b07ee0">CX &amp; Speech</strong></td>
+            <td><code>speech_agent.py</code></td>
+            <td><code>call_transcripts</code></td>
+            <td>50</td>
+            <td>Call recordings, agent CX scores, customer experience, complaint analysis, Whisper transcription</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout callout-amber">
+        <strong>Default fallback:</strong> Credit Intelligence is the last entry in <code>_DOMAINS</code> with pattern
+        <code>re.compile(r".*")</code>. Any query that doesn't match fraud/sentiment/speech keywords routes here.
+        Conversational queries ("Hi", "Thanks") are intercepted <em>before</em> the domain list and bypass all agents.
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         ROOT FILES
+    ═════════════════════════════════ -->
+    <div class="section" id="root-env">
+      <h2><span class="section-num">04 — Root</span>Root-level files</h2>
+      <div class="file-grid">
+
+        <div class="file-card" id="root-env">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">🔑</div>
+            <div>
+              <div class="file-card-title">.env</div>
+              <div class="file-card-path">text_to_sql_demo/.env</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The secret vault. Contains <code>OPENAI_API_KEY</code>, <code>MLFLOW_TRACKING_URI</code>,
+            <code>DB_URL</code>, <code>ENVIRONMENT</code>, and <code>BACKEND_URL</code>.
+            Loaded at startup by <code>config.py</code> via <code>pydantic-settings</code>.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">System breaks without it</span>
+              <span class="badge b-green">Gitignored — never committed</span>
+            </div>
+            <pre>OPENAI_API_KEY=sk-proj-...
+MLFLOW_TRACKING_URI=http://localhost:5000
+MLFLOW_EXPERIMENT_NAME=text-to-sql-demo
+DB_URL=sqlite+aiosqlite:///./data/seeds/dev.db
+ENVIRONMENT=development
+BACKEND_URL=http://localhost:8000</pre>
+          </div>
+        </div>
+
+        <div class="file-card" id="root-makefile">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">⚙️</div>
+            <div>
+              <div class="file-card-title">Makefile</div>
+              <div class="file-card-path">text_to_sql_demo/Makefile</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Shortcut command menu. Removes the need to remember long terminal commands for common operations.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Convenience layer</span>
+              <span class="badge b-optional">System works without it — commands can be typed manually</span>
+            </div>
+            <table class="data-table" style="margin-top:10px">
+              <thead><tr><th>Command</th><th>What it runs</th></tr></thead>
+              <tbody>
+                <tr><td><code>make seed</code></td><td>Generate synthetic data and populate database</td></tr>
+                <tr><td><code>make dev-frontend</code></td><td>Start Streamlit on port 8501</td></tr>
+                <tr><td><code>make dev-mlflow</code></td><td>Start MLflow server on port 5000</td></tr>
+                <tr><td><code>make eval</code></td><td>Run batch evaluations against live backend</td></tr>
+                <tr><td><code>make eval-judge</code></td><td>Eval + LLM-as-judge (GPT-4o scoring)</td></tr>
+                <tr><td><code>make test</code></td><td>Run 38 automated tests</td></tr>
+                <tr><td><code>make lint</code></td><td>Run ruff code quality checks</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="root-pyproject">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">📋</div>
+            <div>
+              <div class="file-card-title">pyproject.toml</div>
+              <div class="file-card-path">text_to_sql_demo/pyproject.toml</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Python project identity card. Declares project name, Python version requirement, and linting tool configuration (ruff). Used by CI/CD pipelines and <code>make lint</code>.</p>
+            <div class="badge-row">
+              <span class="badge b-optional">Not needed for normal runtime — dev tooling only</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         BACKEND CORE
+    ═════════════════════════════════ -->
+    <div class="section" id="be-main">
+      <h2><span class="section-num">05 — Backend</span>Backend core files</h2>
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🐍</div>
+            <div>
+              <div class="file-card-title">main.py</div>
+              <div class="file-card-path">backend/app/main.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The application entry point. <code>uvicorn app.main:app</code> starts here. It: creates the FastAPI instance, pushes <code>OPENAI_API_KEY</code> into <code>os.environ</code> (so OpenAI SDK picks it up), registers all five routers (credit, fraud, sentiment, speech, unified), adds <code>/health</code> endpoint, and configures CORS for both frontends.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">System breaks without it — this is the server process</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-config">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">⚙️</div>
+            <div>
+              <div class="file-card-title">config.py</div>
+              <div class="file-card-path">backend/app/config.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Reads <code>.env</code> via <code>pydantic-settings</code> and exposes a single <code>settings</code> object with typed attributes. Any file in the backend does <code>from app.config import settings</code> to access API keys, model names, database URLs, and MLflow config. Single source of truth — changing a setting means changing it once here, not hunting across dozens of files.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">System breaks without it — all imports of <code>settings</code> fail</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-base-graph">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🧠</div>
+            <div>
+              <div class="file-card-title">base_graph.py</div>
+              <div class="file-card-path">backend/app/agents/base_graph.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The shared agent blueprint. Defines <code>BaseAgentState</code> (the memory all agents carry: messages, session_id, user_query), and <code>build_react_graph(tools, system_prompt)</code> — the factory that builds a LangGraph ReAct agent. All four specialist agents call this one function. Also configures MLflow at module import: sets tracking URI, experiment name, and enables <code>mlflow.openai.autolog()</code> — every OpenAI call is automatically traced without extra code.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → all four agents stop building</span>
+            </div>
+<pre><span class="hl-muted">ReAct loop built by build_react_graph():</span>
+
+START
+  │
+  ▼
+[agent node] ← GPT-4o: "What do I need to answer this?"
+  │
+  ├─ needs a tool → [tools node] → tool runs → back to [agent node]
+  │
+  └─ has enough info → END → answer</pre>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-agents">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🤖</div>
+            <div>
+              <div class="file-card-title">credit_sql_agent.py · fraud_sql_agent.py · sentiment_agent.py · speech_agent.py</div>
+              <div class="file-card-path">backend/app/agents/</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Each file is intentionally thin. It defines the agent's system prompt (its job description), lists which tools it can use, and calls <code>build_react_graph()</code>. The result is a compiled LangGraph graph exported as <code>credit_sql_graph</code>, <code>fraud_sql_graph</code>, etc. — these are the objects imported by <code>unified.py</code>.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove one → that domain returns no answers</span>
+              <span class="badge b-important">System prompt defines tone, format, and data access boundaries</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-agent-utils">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🔗</div>
+            <div>
+              <div class="file-card-title">_agent_utils.py</div>
+              <div class="file-card-path">backend/app/routers/_agent_utils.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The shared invocation function used by every router. <code>invoke_agent(graph, query, session_id, use_case)</code>: opens an MLflow root trace span, calls <code>graph.ainvoke()</code> asynchronously, measures latency, extracts the answer and SQL from the message history, scans for the <code>__CHART__</code> marker via <code>extract_chart_from_messages()</code>, computes inline eval scores, logs everything to MLflow, and returns a structured dict.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → all routers lose agent execution + observability</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         BACKEND ROUTERS
+    ═════════════════════════════════ -->
+    <div class="section" id="be-unified">
+      <h2><span class="section-num">06 — Routers</span>The unified router (★ most important)</h2>
+
+      <div class="file-card">
+        <div class="file-card-head">
+          <div class="file-icon fi-py">⚡</div>
+          <div>
+            <div class="file-card-title">unified.py — POST /api/unified/query</div>
+            <div class="file-card-path">backend/app/routers/unified.py</div>
+          </div>
+        </div>
+        <div class="file-card-body">
+          <p>The entire intelligence of the routing layer. Every query from the React frontend (ChatPage) hits this one endpoint. Contains everything below.</p>
+          <div class="badge-row">
+            <span class="badge b-critical">Remove this → entire ChatPage stops working</span>
+            <span class="badge b-green">This is the production-path entry point</span>
+          </div>
+
+          <h4>_DOMAINS — the domain registry</h4>
+          <p>Ordered list. Fraud is checked before the credit wildcard so fraud queries don't fall through. Each entry has a <code>key</code>, <code>label</code>, compiled regex <code>pattern</code>, and reference to the compiled LangGraph <code>graph</code>.</p>
+<pre>_DOMAINS = [
+  fraud     → <span class="hl-red">re.compile(r"fraud|transact|suspicious|flagg|risk.?score|...")</span>
+  sentiment → <span class="hl-blue">re.compile(r"sentiment|social|twitter|x\.com|linkedin|post|...")</span>
+  speech    → <span class="hl-purple">re.compile(r"call.?cent|speech|transcript|cx|voice|recording|...")</span>
+  credit    → <span class="hl-green">re.compile(r".*")</span>   ← <span class="hl-muted">catches anything that didn't match above</span>
+]</pre>
+
+          <h4>_CONVERSATIONAL — the bypass</h4>
+          <p>Regex matching greetings, thanks, farewells, meta-questions ("who are you"), and queries ≤3 words with no domain keywords. When matched: <code>_conversational_reply()</code> makes a direct OpenAI Chat Completions call (no LangGraph, no SQL), returns in ~50ms, sets <code>agent_label = None</code> → badge hidden.</p>
+
+          <h4>_CREDIT_SIGNALS / _SENTIMENT_SIGNALS — cross-domain detection</h4>
+          <p>Refined regex patterns used for cross-domain fan-out. A query matching both triggers parallel invocation of credit + sentiment agents followed by <code>_synthesise()</code>. Deliberately more specific than the broad domain patterns — prevents "what does credit mean to social perception" from triggering credit SQL tools unnecessarily.</p>
+
+          <h4>_CHART_FOLLOWUP — context-aware routing</h4>
+          <p>Detects follow-up references to already-rendered charts ("the bar chart", "what does that 48% mean", "according to the breakdown"). Routes to sentiment only — no credit agent invoked, because the user is reasoning about data already on screen.</p>
+
+          <h4>_classify(query) — the routing decision function</h4>
+<pre><span class="hl-muted">Priority order (first match wins):</span>
+1. Conversational → general bypass (no specialist)
+2. Chart follow-up + sentiment signal → sentiment only
+3. Credit signals AND sentiment signals → [credit, sentiment] fan-out
+4. First pattern match in _DOMAINS wins
+5. If nothing matches → credit (the .*  wildcard)</pre>
+
+          <h4>_synthesise() — multi-agent answer merging</h4>
+          <p>When ≥2 agents respond, GPT-4o is called once more with both answers and the original query. System prompt enforces: no forced "Executive Summary" header for simple questions, integrate numbers naturally, conversational tone for follow-ups, one "So what?" sentence only when it genuinely adds value.</p>
+
+          <h4>agent_label — the badge signal</h4>
+<pre>agent_label = " + ".join(d["label"] for d in domains if d.get("label"))
+<span class="hl-muted"># "Credit Intelligence"                    ← single domain
+# "Credit Intelligence + Social Sentiment" ← cross-domain
+# None                                     ← conversational — badge hidden</span></pre>
+        </div>
+      </div>
+
+      <div class="file-grid" id="be-domain-routers" style="margin-top:20px">
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🔌</div>
+            <div>
+              <div class="file-card-title">credit_sql.py · fraud_sql.py · sentiment.py · speech.py</div>
+              <div class="file-card-path">backend/app/routers/</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Individual domain routers. Each registers <code>POST /api/&lt;domain&gt;/query</code> and <code>GET /api/&lt;domain&gt;/examples</code>. They are thin wrappers — receive the HTTP request, call <code>invoke_agent()</code>, return the result. The Streamlit frontend pages call these directly. The React ChatPage calls only <code>/api/unified/query</code>.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Required for Streamlit frontend and standalone API use</span>
+              <span class="badge b-optional">Not called by React ChatPage (unified handles routing)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-schemas">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📐</div>
+            <div>
+              <div class="file-card-title">responses.py</div>
+              <div class="file-card-path">backend/app/schemas/responses.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Pydantic models defining the exact shape of every request and response. FastAPI uses these for automatic validation — wrong types are rejected before the function even runs. Also generates the OpenAPI docs at <code>/docs</code>.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → all endpoints fail at import time</span>
+            </div>
+            <table class="data-table" style="margin-top:10px">
+              <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>answer</code></td><td>str</td><td>The AI's natural language response</td></tr>
+                <tr><td><code>sql_query</code></td><td>str | None</td><td>SQL generated by the agent (if any)</td></tr>
+                <tr><td><code>table_data</code></td><td>list | None</td><td>Raw result rows (max 500)</td></tr>
+                <tr><td><code>chart_data</code></td><td>dict | None</td><td>Structured chart payload for frontend</td></tr>
+                <tr><td><code>latency_ms</code></td><td>float | None</td><td>Agent execution time in milliseconds</td></tr>
+                <tr><td><code>eval_scores</code></td><td>dict | None</td><td>sql_valid, sql_safe, answer_quality (0–1)</td></tr>
+                <tr><td><code>agent_label</code></td><td>str | None</td><td><strong>Controls domain badge.</strong> Null = conversational, badge hidden</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         TOOLS
+    ═════════════════════════════════ -->
+    <div class="section" id="tools-sql">
+      <h2><span class="section-num">07 — Tools</span>What agents can do</h2>
+
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-sql">🗄️</div>
+            <div>
+              <div class="file-card-title">sql_tools.py</div>
+              <div class="file-card-path">backend/app/tools/sql_tools.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Four <code>@tool</code> + <code>@mlflow.trace</code> decorated functions. Two per domain (schema lookup + SQL execution). The agent cannot query the database without these.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → credit and fraud agents cannot answer data questions</span>
+            </div>
+            <table class="data-table" style="margin-top:10px">
+              <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>get_credit_schema()</code></td><td>Returns <code>credit_applications</code> column names and types so agent knows what it can query</td></tr>
+                <tr><td><code>execute_credit_sql(sql)</code></td><td>Executes SELECT against credit table. Two safety layers: regex rejects DDL; <code>readonly_engine</code> has no write permission at DB level</td></tr>
+                <tr><td><code>get_fraud_schema()</code></td><td>Same for <code>fraud_transactions</code></td></tr>
+                <tr><td><code>execute_fraud_sql(sql)</code></td><td>Same safety layers, fraud table</td></tr>
+              </tbody>
+            </table>
+            <div class="callout callout-red" style="margin-top:12px">
+              <strong>SQL safety architecture — two independent layers:</strong><br/>
+              Layer 1: <code>_validate_sql()</code> — regex rejects INSERT/UPDATE/DELETE/DROP/ALTER before execution.<br/>
+              Layer 2: <code>readonly_engine</code> — the database connection itself has no write permission. Even a bypassed Layer 1 cannot cause damage.
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="tools-chart">
+          <div class="file-card-head">
+            <div class="file-icon fi-ts">📊</div>
+            <div>
+              <div class="file-card-title">chart_tools.py</div>
+              <div class="file-card-path">backend/app/tools/chart_tools.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Enhanced SQL tools that embed structured chart data in their return string using the <strong>string marker pattern</strong>. This is the mechanism that gets chart data from a LangGraph tool call all the way to the React frontend.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Remove this → charts stop rendering, but text answers still work</span>
+            </div>
+            <h4>Why a string marker and not a ContextVar?</h4>
+            <p>LangGraph's <code>ToolNode</code> uses <code>asyncio.gather()</code> internally, creating new async Tasks. Each Task gets a <em>copy</em> of Python's ContextVar context at creation — mutations inside those Tasks vanish when they finish. The string marker lives inside LangGraph's own message state (the messages list), which survives <code>ainvoke()</code> intact.</p>
+<pre><span class="hl-muted">Tool return string format:</span>
+
+"Branches by loan amount: Sandton leads at R4.2M...
+
+__CHART__:{"chart_type":"bar","title":"Loan Amount by Branch",
+"x_key":"branch","y_key":"total_amount",
+"rows":[{"branch":"Sandton","total_amount":4200000},...]}:__ENDCHART__"
+
+<span class="hl-muted">After ainvoke(), extract_chart_from_messages() scans all ToolMessages
+for the __CHART__ marker, parses the JSON, returns it as chart_data.</span></pre>
+            <table class="data-table" style="margin-top:10px">
+              <thead><tr><th>Function</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td><code>execute_credit_sql_chart()</code></td><td>Credit SQL + embeds chart marker in return</td></tr>
+                <tr><td><code>execute_fraud_sql_chart()</code></td><td>Fraud SQL + embeds chart marker in return</td></tr>
+                <tr><td><code>_build_tool_response()</code></td><td>Assembles narrative + <code>__CHART__:{json}:__ENDCHART__</code></td></tr>
+                <tr><td><code>extract_chart_from_messages()</code></td><td>Scans LangGraph message list post-ainvoke, returns parsed dict or None</td></tr>
+                <tr><td><code>reset_chart_context()</code>, <code>pop_chart_data()</code></td><td>Backward-compat stubs — no-ops, safe to leave</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="tools-sentiment">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">💬</div>
+            <div>
+              <div class="file-card-title">sentiment_tools.py</div>
+              <div class="file-card-path">backend/app/tools/sentiment_tools.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Tools for the social sentiment agent. Queries the <code>social_posts</code> table with optional filters.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → sentiment agent cannot answer any questions</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>fetch_social_posts(limit, platform, topic)</code></td><td>Queries social_posts, filterable by platform (X/LinkedIn) and topic</td></tr>
+                <tr><td><code>get_sentiment_breakdown()</code></td><td>Returns aggregated positive/neutral/negative counts and percentages</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="tools-whisper">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🎙️</div>
+            <div>
+              <div class="file-card-title">whisper_tools.py</div>
+              <div class="file-card-path">backend/app/tools/whisper_tools.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Tools for the speech/CX agent. Handles audio transcription via OpenAI Whisper and transcript retrieval from the database.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → speech agent cannot transcribe or answer call questions</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>transcribe_audio(audio_bytes_b64, filename)</code></td><td>Sends base64 audio to Whisper API, returns transcript text</td></tr>
+                <tr><td><code>get_transcript_from_db(call_id)</code></td><td>Fetches stored transcript from <code>call_transcripts</code></td></tr>
+                <tr><td><code>list_available_transcripts(limit)</code></td><td>Lists call records: date, agent, reason, resolution status</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         DATABASE
+    ═════════════════════════════════ -->
+    <div class="section" id="db-session">
+      <h2><span class="section-num">08 — Database</span>Database layer</h2>
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🔌</div>
+            <div>
+              <div class="file-card-title">session.py</div>
+              <div class="file-card-path">backend/app/db/session.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Creates two async SQLAlchemy engine objects. <code>engine</code> has read/write access (used only for seeding data). <code>readonly_engine</code> has read-only access — this is what all agent tools use. Two independent connections = safety by design: even if SQL injection bypassed the regex validator, the read-only connection prevents writes.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → database access fails everywhere</span>
+              <span class="badge b-green">async engines — non-blocking under concurrent load</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="db-models">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📋</div>
+            <div>
+              <div class="file-card-title">models.py</div>
+              <div class="file-card-path">backend/app/db/models.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>SQLAlchemy ORM definitions for all four database tables. Changing a column here does not automatically change the database — Alembic migrations in <code>db/migrations/</code> handle that.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → seeding fails, schema tools fail</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Model</th><th>Table</th><th>Rows</th><th>Key columns</th></tr></thead>
+              <tbody>
+                <tr><td><code>CreditApplication</code></td><td>credit_applications</td><td>500</td><td>credit_score, loan_amount, status, decline_reason, province, branch</td></tr>
+                <tr><td><code>FraudTransaction</code></td><td>fraud_transactions</td><td>300</td><td>amount, merchant_category, is_fraud, risk_score, model_flagged</td></tr>
+                <tr><td><code>SocialPost</code></td><td>social_posts</td><td>400</td><td>platform, content, sentiment, topic, likes, shares</td></tr>
+                <tr><td><code>CallTranscript</code></td><td>call_transcripts</td><td>50</td><td>agent_name, transcript_text, cx_score, call_reason, resolution_status</td></tr>
+                <tr><td><code>UploadedDocument</code></td><td>uploaded_documents</td><td>dynamic</td><td>filename, file_type, summary, latency_ms — one row per uploaded file</td></tr>
+                <tr><td><code>DocumentChunk</code></td><td>document_chunks</td><td>dynamic</td><td>doc_id (FK), chunk_index, content, embedding (JSON float list) — RAG store</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         RAG & DOCUMENT INTELLIGENCE
+    ═════════════════════════════════ -->
+    <div class="section" id="rag-overview">
+      <h2><span class="section-num">09 — RAG</span>Document &amp; Audio Intelligence</h2>
+
+      <p>
+        The RAG (Retrieval-Augmented Generation) module lets users upload documents or audio recordings
+        and ask questions against them — grounded on the actual file content, not model memory.
+        Audio recordings (call centre, voice notes) are transcribed by Whisper-1 and analysed as
+        <strong>call intelligence</strong> with a specialist 5-section assessor prompt.
+      </p>
+
+      <div class="callout callout-blue">
+        <strong>Three-path submit logic in ChatPage.tsx:</strong><br/>
+        <strong>PATH A</strong> — File attached: upload → index → auto-summary (or direct RAG if question typed alongside upload).<br/>
+        <strong>PATH B</strong> — Active document (banner shown): route question through RAG against the last uploaded doc.<br/>
+        <strong>PATH C</strong> — Normal unified agent query (no document context).
+      </div>
+
+      <div class="file-grid">
+
+        <div class="file-card" id="rag-parser">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📄</div>
+            <div>
+              <div class="file-card-title">parser.py</div>
+              <div class="file-card-path">backend/app/rag/parser.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Text and audio extraction layer. Routes by file type: PDFs go through <code>PyMuPDF</code>,
+            plain/CSV/Markdown read as UTF-8, audio files go through OpenAI Whisper-1 API.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → upload pipeline breaks for all file types</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Symbol</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>AUDIO_EXTENSIONS</code></td><td>Frozenset: <code>{mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, flac}</code> — any extension in this set routes to Whisper</td></tr>
+                <tr><td><code>extract_text(filename, content)</code></td><td>Async dispatcher → PyMuPDF for PDF, raw decode for text/CSV/Markdown</td></tr>
+                <tr><td><code>extract_audio(filename, content)</code></td><td>Async → AsyncOpenAI Whisper-1 → returns full transcript string. Sets <code>audio_io.name</code> so the SDK detects MIME from extension</td></tr>
+                <tr><td><code>chunk_text(text, size, overlap)</code></td><td>Splits text into overlapping windows (default 800 chars, 80 overlap). Returns list of chunk strings</td></tr>
+              </tbody>
+            </table>
+            <div class="callout callout-amber" style="margin-top:10px">
+              <strong>Whisper file size limit:</strong> OpenAI hard-caps Whisper uploads at 25 MB. The <code>documents.py</code> router enforces this independently before calling <code>extract_audio()</code>.
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="rag-embedder">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🔢</div>
+            <div>
+              <div class="file-card-title">embedder.py</div>
+              <div class="file-card-path">backend/app/rag/embedder.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Converts text chunks into dense vector representations using OpenAI <code>text-embedding-ada-002</code>.
+            Embeddings are stored as JSON float lists in the <code>document_chunks</code> SQLite column.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → chunks cannot be embedded; RAG search fails</span>
+            </div>
+            <pre><span class="hl-muted">embed_chunks(chunks: list[str]) → list[list[float]]</span>
+Each chunk → OpenAI Embeddings API → 1536-dim float vector</pre>
+          </div>
+        </div>
+
+        <div class="file-card" id="rag-store">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🗃️</div>
+            <div>
+              <div class="file-card-title">store.py</div>
+              <div class="file-card-path">backend/app/rag/store.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>SQLite-backed vector store. Persists chunk embeddings using the existing <code>engine</code> and
+            retrieves the top-k chunks for a query via cosine similarity.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → no chunks can be stored or retrieved; RAG fails entirely</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Function</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>save_chunks(doc_id, chunks, embeddings)</code></td><td>Inserts one <code>DocumentChunk</code> row per chunk into <code>document_chunks</code></td></tr>
+                <tr><td><code>search_chunks(doc_id, query_vec, top_k)</code></td><td>Loads all chunk embeddings for a document, computes cosine similarity against query vector, returns top-k chunks sorted by relevance</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="rag-router">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🌐</div>
+            <div>
+              <div class="file-card-title">documents.py — POST /api/documents/* ★</div>
+              <div class="file-card-path">backend/app/routers/documents.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The orchestration layer for the entire RAG pipeline. Four endpoints, two system-prompt personalities (document vs call), size limits per file type.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → file upload, RAG Q&amp;A, and audio analysis stop working</span>
+            </div>
+
+            <h4>Endpoints</h4>
+            <table class="data-table" style="margin-top:6px">
+              <thead><tr><th>Endpoint</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>POST /upload</code></td><td>Accept file → detect type → extract text/audio → chunk → embed → save ORM rows → GPT-4o summary → return <code>{doc_id, filename, summary, latency_ms}</code></td></tr>
+                <tr><td><code>POST /{doc_id}/query</code></td><td>Embed question → cosine search → top-k chunks → GPT-4o grounded answer. Uses <code>_CALL_RAG_SYSTEM</code> if doc is audio, <code>_RAG_SYSTEM</code> otherwise</td></tr>
+                <tr><td><code>GET /list</code></td><td>Returns all uploaded documents (id, filename, file_type, created_at)</td></tr>
+                <tr><td><code>DELETE /{doc_id}</code></td><td>Removes document + all its chunks from both ORM tables</td></tr>
+              </tbody>
+            </table>
+
+            <h4>Size limits</h4>
+            <pre>Audio files  (.mp3/.wav/.webm etc.) → <span class="hl-red">25 MB hard cap</span>  (Whisper API limit)
+Documents    (.pdf/.txt/.csv etc.) → <span class="hl-amber">50 MB hard cap</span></pre>
+
+            <h4>System prompts</h4>
+            <table class="data-table" style="margin-top:6px">
+              <thead><tr><th>Prompt constant</th><th>Used when</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>_SUMMARY_SYSTEM</code></td><td>Auto-summary of a document upload</td><td>Concise document overview</td></tr>
+                <tr><td><code>_RAG_SYSTEM</code></td><td>Q&amp;A against a document</td><td>Grounded answer using provided chunk context; no hallucination beyond the doc</td></tr>
+                <tr><td><code>_CALL_ANALYSIS_SYSTEM</code></td><td>Auto-summary of an audio upload</td><td>5-section call-centre assessor: call overview · client sentiment (with quotes) · agent performance · compliance &amp; risk flags · client needs &amp; recommended actions</td></tr>
+                <tr><td><code>_CALL_RAG_SYSTEM</code></td><td>Q&amp;A against a call transcript</td><td>Grounded on transcript context; labels speakers as "the client" / "the agent"; supports sentiment assessments with direct quotes</td></tr>
+              </tbody>
+            </table>
+
+            <div class="callout callout-green" style="margin-top:12px">
+              <strong>Audio routing (is_audio flag):</strong> <code>is_audio = file_type in AUDIO_EXTENSIONS</code>.
+              When <code>True</code>: <code>extract_audio()</code> instead of <code>extract_text()</code>, <code>_CALL_ANALYSIS_SYSTEM</code> for summaries,
+              <code>_CALL_RAG_SYSTEM</code> for follow-up queries. All other pipeline steps (chunk → embed → store) are identical.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         EVALS
+    ═════════════════════════════════ -->
+    <div class="section" id="evals-overview">
+      <h2><span class="section-num">09 — Evals</span>Evaluation framework</h2>
+      <p>Three tiers of evaluation ensure the system produces correct, safe, and high-quality answers — not just responses that run without crashing.</p>
+
+      <table class="data-table">
+        <thead><tr><th>Tier</th><th>When</th><th>Cost</th><th>What it catches</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Inline (Tier 1)</strong></td>
+            <td>Every query automatically</td>
+            <td>Zero — no API calls</td>
+            <td>Invalid SQL syntax, dangerous SQL keywords, empty/refusal answers</td>
+          </tr>
+          <tr>
+            <td><strong>Batch (Tier 2)</strong></td>
+            <td><code>make eval</code> on demand</td>
+            <td>Small — 14 OpenAI calls</td>
+            <td>Full-pipeline regressions across all 14 golden test cases, logged to MLflow with CSV artifact</td>
+          </tr>
+          <tr>
+            <td><strong>LLM Judge (Tier 3)</strong></td>
+            <td><code>make eval-judge</code> occasionally</td>
+            <td>More tokens — GPT-4o judges each response</td>
+            <td>Answer relevance and semantic similarity against ground truth — catches "valid but wrong" answers</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="file-grid" id="evals-metrics">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📏</div>
+            <div>
+              <div class="file-card-title">metrics.py</div>
+              <div class="file-card-path">backend/app/evals/metrics.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>All scoring logic in one place. <code>compute_inline_scores(answer, sql)</code> is called from <code>_agent_utils.py</code> after every agent run. Returns a dict of <code>eval/sql_valid</code>, <code>eval/sql_safe</code>, <code>eval/answer_quality</code> — logged to MLflow and returned to the frontend as coloured dots.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Remove this → inline scores disappear; batch evals lose scoring</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Metric</th><th>Pass condition</th><th>Fail condition</th></tr></thead>
+              <tbody>
+                <tr><td><code>eval/sql_valid</code></td><td>SQL parses via SQLite EXPLAIN</td><td>Syntax error</td></tr>
+                <tr><td><code>eval/sql_safe</code></td><td>No DROP/DELETE/INSERT/ALTER</td><td>Dangerous keyword found</td></tr>
+                <tr><td><code>eval/answer_quality</code></td><td>≥30 chars, not an error phrase</td><td>Empty or refusal response</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="evals-dataset">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🗂️</div>
+            <div>
+              <div class="file-card-title">dataset.py</div>
+              <div class="file-card-path">backend/app/evals/dataset.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The golden dataset — 14 handcrafted test cases (6 credit, 5 fraud, 3 sentiment). Each has a <code>query</code>, a <code>ground_truth</code> description of a correct answer, <code>expected_sql_contains</code> keywords, and the target <code>endpoint</code>. Used by <code>harness.py</code> for batch evals and by the LLM judge for semantic scoring.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Remove this → batch evals have no test cases to run</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="evals-harness">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🏃</div>
+            <div>
+              <div class="file-card-title">harness.py</div>
+              <div class="file-card-path">backend/app/evals/harness.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The <code>make eval</code> script. Opens an MLflow run, loops through all 14 test cases calling the live backend, scores each response, logs a <code>pass_rate</code> metric, mean latency, per-case table, and a downloadable CSV artifact. Optionally runs the LLM judge as a nested MLflow run.</p>
+            <div class="badge-row">
+              <span class="badge b-optional">Not needed for production runtime — dev/QA tooling</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         REACT FRONTEND
+    ═════════════════════════════════ -->
+    <div class="section" id="ui-main">
+      <h2><span class="section-num">10 — React Frontend</span>NedCard UI — production interface</h2>
+
+      <p>React 18 + TypeScript application, port 3002 via Vite. Tailwind CSS with custom <code>ned-*</code> design tokens. Framer Motion for animations. Recharts for SVG charts. Axios for HTTP. Browser MediaRecorder API for voice recording.</p>
+
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">⚛️</div>
+            <div>
+              <div class="file-card-title">main.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/main.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>React entry point. Renders <code>&lt;App /&gt;</code> into <code>#root</code>. First file React executes in the browser.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → blank page</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-app">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">🗺️</div>
+            <div>
+              <div class="file-card-title">App.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/App.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The router shell. Wraps everything in <code>&lt;AuthProvider&gt;</code>, <code>&lt;ChatHistoryProvider&gt;</code>, and <code>&lt;BrowserRouter&gt;</code>. Route <code>/</code> redirects to <code>/chat</code>. <code>ProtectedRoute</code> checks <code>isAuthenticated</code> and redirects to <code>/login</code> when false. Defines all page routes.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → navigation and auth protection fail</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-types">
+          <div class="file-card-head">
+            <div class="file-icon fi-ts">📐</div>
+            <div>
+              <div class="file-card-title">types/index.ts</div>
+              <div class="file-card-path">nedcard-ui/src/types/index.ts</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>All shared TypeScript interfaces. <code>AgentResponse</code> includes <code>agent_label?: string | null</code> which gates the domain badge. <code>ChatMessage</code> carries <code>role</code>, <code>content</code>, optional chart/table/SQL. <code>ChartData</code> covers the sentiment-specific chart shape.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → TypeScript compilation fails immediately</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-api">
+          <div class="file-card-head">
+            <div class="file-icon fi-ts">🌐</div>
+            <div>
+              <div class="file-card-title">lib/api.ts</div>
+              <div class="file-card-path">nedcard-ui/src/lib/api.ts</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Axios instance with 120-second timeout (LLM calls can be slow). All backend communication goes through these functions.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → no backend communication anywhere in the app</span></div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Function</th><th>What it calls</th></tr></thead>
+              <tbody>
+                <tr><td><code>queryAgent(endpoint, query, sessionId)</code></td><td>POST to any unified/domain agent endpoint</td></tr>
+                <tr><td><code>uploadDocument(file)</code></td><td>Multipart POST to <code>/api/documents/upload</code> — ingest PDF/audio/text into RAG pipeline; returns <code>{doc_id, filename, summary}</code></td></tr>
+                <tr><td><code>queryDocument(docId, question, sessionId)</code></td><td>POST to <code>/api/documents/{id}/query</code> — RAG Q&amp;A against a previously uploaded document</td></tr>
+                <tr><td><code>uploadAudio(blob, filename, prompt, sessionId)</code></td><td>Multipart POST to <code>/api/speech/transcribe</code> — full Whisper + GPT-4o analysis (Streamlit path)</td></tr>
+                <tr><td><code>getSentimentChartData(params)</code></td><td>GET filtered sentiment chart data</td></tr>
+                <tr><td><code>textToSpeech(text, voice)</code></td><td>POST <code>/api/speech/tts</code> with voice (<code>'nova'</code>) → returns MP3 Blob for browser playback</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-auth">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">🔐</div>
+            <div>
+              <div class="file-card-title">context/AuthContext.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/context/AuthContext.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Login/logout state stored in <code>sessionStorage</code> (survives page refresh, clears on browser close). Exports <code>useAuth()</code> hook: <code>{ user, login, logout, isAuthenticated }</code>. Currently uses mock auth — a JSON user object, no real password verification.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → useAuth() calls crash, auth gate breaks</span>
+              <span class="badge b-amber">Mock auth only — replace with JWT for production</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-history">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">💾</div>
+            <div>
+              <div class="file-card-title">context/ChatHistoryContext.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/context/ChatHistoryContext.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Stores conversation history in <code>useRef&lt;Record&lt;string, ChatMessage[]&gt;&gt;({})</code> — keyed by API endpoint URL. Uses <code>useRef</code> (not <code>useState</code>) so history writes do not trigger re-renders. History survives route navigation within the app session but clears on page reload (no localStorage persistence).</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove this → ChatPage loses history between renders</span>
+              <span class="badge b-blue">useRef design = zero re-render cost on writes</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-chatpage">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">⭐</div>
+            <div>
+              <div class="file-card-title">pages/ChatPage.tsx — PRIMARY INTERFACE</div>
+              <div class="file-card-path">nedcard-ui/src/pages/ChatPage.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The most important file in the frontend. Every domain query flows through here. A complete intelligent chat page with voice recording, file attachment, live chart rendering, and animated thinking steps.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → the entire production interface is gone</span></div>
+
+            <h4>Three-path submit() logic</h4>
+            <p><strong>PATH A — file attached:</strong> <code>uploadDocument(file)</code> → if question typed, skip auto-summary and call <code>submitDocQuery()</code> immediately (prevents duplicate responses); if no question, display auto-summary. Sets <code>activeDocId</code>/<code>activeDocName</code> amber banner for follow-up questions.</p>
+            <p><strong>PATH B — activeDocId set:</strong> <code>queryDocument(activeDocId, question)</code> → RAG answer. Active doc banner stays until user clicks ×.</p>
+            <p><strong>PATH C — no file, no active doc:</strong> <code>queryAgent('/api/unified/query', ...)</code> → normal multi-domain pipeline.</p>
+            <pre><span class="hl-muted">File input accept:</span>
+".pdf,.txt,.csv,.md,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,.ogg,.flac"</pre>
+
+            <h4>Voice recording (MediaRecorder API) — redesigned</h4>
+            <p><code>startRecording()</code> creates <code>MediaRecorder(stream, {mimeType:'audio/webm'})</code>. On stop: assembles Blob → wraps as <code>File('voice-recording-{ts}.webm')</code> → <code>setAttachedFile(file)</code>. The audio file then travels through PATH A (Whisper on server side, call analysis). Recording is no longer transcribed client-side to text.</p>
+            <p>Live <code>m:ss</code> timer (red pill, <code>setInterval 1000ms</code>) resets on stop. Textarea placeholder reads "Recording… click mic to stop &amp; attach" while active.</p>
+
+            <h4>TTS — Listen / Stop button</h4>
+            <p>Every completed assistant message has a speaker button below the bubble. Calls <code>handleSpeak(msgId, text)</code> → <code>textToSpeech(text, 'nova')</code> → POST <code>/api/speech/tts</code> → audio Blob → <code>URL.createObjectURL</code> → <code>new Audio(url).play()</code>. Toggle stops playback. Only one message plays at a time (<code>activeSpeaker</code> ref).</p>
+<pre><span class="hl-muted">State:</span>  speakingId: string | null    <span class="hl-muted">← which message is currently speaking</span>
+<span class="hl-muted">Ref:</span>   activeSpeaker: HTMLAudioElement | null
+<span class="hl-muted">UI:</span>    idle   → 🔊 Listen  (ned-muted)
+       active → ⏸ Stop   (ned-green, animate-pulse bars)</pre>
+
+            <h4>Domain badge — removed from above messages</h4>
+            <p>The domain pill ("Credit Intelligence", etc.) was removed from above message bubbles. Domain metadata is still stored in <code>domainMeta</code> state for potential future use, but is no longer rendered in the chat thread.</p>
+
+            <h4>Thinking indicator — Progressive Disclosure of Agent Reasoning</h4>
+            <p>The staged chain-of-thought streaming UI is fully active. Four sequential steps replace a single spinner, each narrating a real phase of agent execution:</p>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Step</th><th>Label shown</th><th>Agent phase</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td>Routing your question…</td><td>Router node classifying domain</td></tr>
+                <tr><td>1</td><td><em>domain-specific</em> e.g. "Scanning fraud records…"</td><td>SQL agent querying the DB</td></tr>
+                <tr><td>2</td><td>Interpreting results…</td><td>LLM interpreting query output</td></tr>
+                <tr><td>3</td><td>Composing your answer…</td><td>Final response generation</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px">Steps cycle every 1.4 s via <code>setInterval</code>. Visual anatomy: pill progress-bar segments fill with domain accent colour → <code>AnimatePresence mode="wait"</code> slides each label in/out → trailing pulse dots. Domain colour flows through all elements (<code>thinkingMeta.color</code>: green/red/blue/purple/amber).</p>
+
+            <h4>User avatar in MessageBubble</h4>
+            <p>User messages now show a matching <code>w-11 h-11</code> blue→purple gradient circle with the user's initials on the right side (via <code>userInitials</code> prop passed from <code>ChatPage</code>). AI messages retain the logo avatar on the left.</p>
+
+            <h4>Empty-state hero icon glow</h4>
+            <p>The logo above "What do you need to know?" pulses with a green glow — a <code>motion.span</code> ring breathes (opacity 0.15→0.45→0.15, scale 1→1.18→1) on a 3 s infinite <code>easeInOut</code> loop. A static <code>boxShadow</code> provides a constant halo. Circle: <code>w-36 h-36</code>. Image: <code>w-24 h-24</code>.</p>
+
+            <h4>Chart position</h4>
+            <p><code>&lt;DynamicChart&gt;</code> renders <em>above</em> <code>&lt;MessageBubble&gt;</code> in JSX. The AI often says "as shown in the chart above" — this ordering makes that spatially accurate.</p>
+
+            <h4>Typewriter streaming — punctuation-aware pacing</h4>
+            <p>Backend returns the complete answer in one HTTP response. Client-side streaming reveals it character-by-character via recursive <code>setTimeout</code> with variable delays:</p>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Condition</th><th>Delay</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td>Normal character</td><td>18 ms</td><td>~55 chars/sec — smooth reading pace</td></tr>
+                <tr><td>After . ! ?</td><td>210 ms</td><td>Sentence breath</td></tr>
+                <tr><td>After , ; :</td><td>90 ms</td><td>Clause beat</td></tr>
+                <tr><td>After \n</td><td>130 ms</td><td>Paragraph pause</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px">Previous: <code>setInterval</code> at +6 chars / 16 ms = 375 chars/sec (mechanical). Current: recursive <code>setTimeout</code> where each character schedules its successor independently.</p>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-dynamicchart">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">📈</div>
+            <div>
+              <div class="file-card-title">components/DynamicChart.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/components/DynamicChart.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The charting engine. Accepts any <code>chart_data</code> payload and renders the appropriate chart type with fullscreen expand capability.</p>
+            <div class="badge-row"><span class="badge b-important">Remove this → all chart rendering stops; text answers still work</span></div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Function/Component</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td><code>fmtTick(v)</code></td><td>Y-axis abbreviation: 1,500,000 → <code>1.5M</code>, 75,000 → <code>75K</code></td></tr>
+                <tr><td><code>prettyKey(k)</code></td><td>Format: <code>loan_amount_requested</code> → <code>Loan Amount Requested</code></td></tr>
+                <tr><td><code>BarChartView</code> / <code>LineChartView</code></td><td>Recharts bar/line with <code>Label</code> on both axes, 64px YAxis width, left margin 16</td></tr>
+                <tr><td><code>PieChartView</code></td><td>Recharts pie with scrollable legend</td></tr>
+                <tr><td><code>GenericChartCard</code></td><td>Compact inline card with "Full view" expand button</td></tr>
+                <tr><td><code>FullscreenModal</code></td><td><code>createPortal(document.body)</code> — ESC/backdrop closes, 460px chart height, <code>AnimatePresence</code> animation</td></tr>
+                <tr><td>Shape discrimination</td><td><code>isSentimentChartData()</code> → <code>SentimentInlineChart</code>; <code>isGenericChartData()</code> → <code>GenericChartCard</code>; else null</td></tr>
+              </tbody>
+            </table>
+            <div class="callout callout-blue" style="margin-top:12px">
+              <strong>Why createPortal?</strong> Without it, the fullscreen modal is mounted inside the chat message DOM tree which has <code>overflow: hidden</code> and low <code>z-index</code> ancestors. The modal would be clipped or appear behind other elements. <code>createPortal(element, document.body)</code> mounts at the DOM root, bypassing all parent constraints.
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-messagebubble">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">💬</div>
+            <div>
+              <div class="file-card-title">components/MessageBubble.tsx</div>
+              <div class="file-card-path">nedcard-ui/src/components/MessageBubble.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Renders a single chat message. User messages: right-aligned with user avatar. AI messages: left-aligned with logo avatar, markdown rendering, optional SQL expandable panel, optional data table, latency + eval score badges. Accepts <code>displayContent</code> (typewriter string) and <code>isStreaming</code> flag for the cursor blink.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → no messages render in chat</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-vite">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">⚡</div>
+            <div>
+              <div class="file-card-title">vite.config.ts</div>
+              <div class="file-card-path">nedcard-ui/vite.config.ts</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Vite dev server config. Sets port 3002 and proxies all <code>/api/*</code> requests to <code>http://localhost:8000</code>. This means the React app calls <code>/api/unified/query</code> (relative URL) and Vite silently forwards it to FastAPI. No CORS issues in development.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Remove proxy → all API calls fail with CORS or 404 errors</span>
+            </div>
+<pre>proxy: {
+  "/api": "http://localhost:8000"
+}</pre>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-tailwind">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">🎨</div>
+            <div>
+              <div class="file-card-title">tailwind.config.js</div>
+              <div class="file-card-path">nedcard-ui/tailwind.config.js</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Extends Tailwind with custom <code>ned-*</code> design tokens used throughout every component.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → <code>ned-green</code>, <code>ned-dark</code>, etc. classes fail; entire visual design breaks</span></div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Token</th><th>Hex</th><th>Used for</th></tr></thead>
+              <tbody>
+                <tr><td><code>ned-green</code></td><td>#00C66A</td><td>Send button, active states, live indicator</td></tr>
+                <tr><td><code>ned-dark</code></td><td>#0D1117</td><td>Page background</td></tr>
+                <tr><td><code>ned-dark2</code></td><td>#161B22</td><td>Header, panel backgrounds</td></tr>
+                <tr><td><code>ned-slate</code></td><td>#1C2333</td><td>Input area, card backgrounds</td></tr>
+                <tr><td><code>ned-muted</code></td><td>#6B7A8E</td><td>Placeholder text, secondary labels</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         STREAMLIT FRONTEND
+    ═════════════════════════════════ -->
+    <div class="section" id="sl-app">
+      <h2><span class="section-num">11 — Streamlit</span>Streamlit rapid-prototype frontend</h2>
+      <p>Python-only web app, port 8501. Built for demo speed. Operates the same backend API. No JavaScript, no CSS complexity — but limited interactivity compared to React.</p>
+
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🐍</div>
+            <div>
+              <div class="file-card-title">app.py</div>
+              <div class="file-card-path">frontend/app.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Navigation shell. Sets page title, icon, sidebar layout, defines the 4-tab menu, shows backend health status. Contains no AI logic — pure layout and navigation.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → Streamlit app won't start</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="sl-api">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📡</div>
+            <div>
+              <div class="file-card-title">api_client.py</div>
+              <div class="file-card-path">frontend/api_client.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>All HTTP calls from Streamlit pages go through this file. Uses <code>httpx</code> with a 120-second timeout. The Streamlit frontend is a "dumb terminal": it sends questions and displays answers, with all intelligence in the backend. This separation means the Streamlit app can be fully replaced without touching the backend.</p>
+            <div class="badge-row"><span class="badge b-critical">Remove this → Streamlit pages cannot talk to backend</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="sl-pages">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📄</div>
+            <div>
+              <div class="file-card-title">pages/ — Four use case pages</div>
+              <div class="file-card-path">frontend/pages/</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Each page calls its dedicated backend endpoint (<code>/api/credit/query</code>, <code>/api/fraud/query</code>, etc.) — not the unified router. All follow the same pattern: quick metrics → example buttons → conversation history → input box → on submit: call backend → display answer + SQL + table + eval badges.</p>
+            <div class="badge-row">
+              <span class="badge b-important">Required for Streamlit demo interface</span>
+              <span class="badge b-optional">Not used by React ChatPage</span>
+            </div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Page</th><th>Notable features</th></tr></thead>
+              <tbody>
+                <tr><td><code>1_Credit_SQL.py</code></td><td>Standard chat UI</td></tr>
+                <tr><td><code>2_Fraud_SQL.py</code></td><td>Quick-metrics bar (fraud % confirmed/suspected/cleared), risk_score colour gradient in tables</td></tr>
+                <tr><td><code>3_Sentiment_Analysis.py</code></td><td>Static dashboard: donut chart (sentiment breakdown) + bar chart (topic volume) + platform split</td></tr>
+                <tr><td><code>4_Speech_Insights.py</code></td><td>Three tabs: Upload Audio (Whisper), Browse Stored Transcripts, Ask Questions</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <!-- ════════════════════════════════
+         DATA
+    ═════════════════════════════════ -->
+    <div class="section" id="data-generators">
+      <h2><span class="section-num">12 — Data</span>Synthetic database</h2>
+      <p>All data is fake — generated programmatically to look realistic without exposing real customer information. Total: <strong>1,250 rows</strong> across 4 tables.</p>
+
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-data">🏭</div>
+            <div>
+              <div class="file-card-title">data/synthetic/ — Four generators</div>
+              <div class="file-card-path">data/synthetic/generate_*.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Python scripts using <code>faker</code> and domain-specific logic to generate realistic data. Run by <code>seed_db.py</code> in sequence.</p>
+            <div class="badge-row"><span class="badge b-important">Required to regenerate data after <code>make clean</code> or on a fresh clone</span></div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Script</th><th>Rows</th><th>Key synthetic fields</th></tr></thead>
+              <tbody>
+                <tr><td><code>generate_credit_data.py</code></td><td>500</td><td>credit_score, loan_amount, employment_status, province, branch, decline_reason</td></tr>
+                <tr><td><code>generate_fraud_data.py</code></td><td>300</td><td>amount, merchant_category, is_fraud, risk_score, model_flagged, investigator_notes</td></tr>
+                <tr><td><code>generate_social_data.py</code></td><td>400</td><td>platform, content, sentiment, topic, likes, shares</td></tr>
+                <tr><td><code>generate_speech_transcripts.py</code></td><td>50</td><td>agent_name, transcript_text, cx_score, call_reason, resolution_status</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="data-seed">
+          <div class="file-card-head">
+            <div class="file-icon fi-data">🌱</div>
+            <div>
+              <div class="file-card-title">seed_db.py</div>
+              <div class="file-card-path">data/seed_db.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Runs all four generators in sequence and inserts results into <code>data/seeds/dev.db</code>. Execute once with <code>make seed</code>. Safe to re-run — drops and recreates tables each time.</p>
+            <div class="badge-row"><span class="badge b-important">Required once on first setup and after any schema change</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="data-db">
+          <div class="file-card-head">
+            <div class="file-icon fi-sql">🗃️</div>
+            <div>
+              <div class="file-card-title">dev.db</div>
+              <div class="file-card-path">data/seeds/dev.db</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The SQLite database file. A single file containing all 1,250 rows. Gitignored (regenerable). Zero infrastructure required — no server to install or start. In production, <code>DB_URL</code> in <code>.env</code> would point to PostgreSQL; all other code is unchanged thanks to SQLAlchemy's abstraction layer.</p>
+            <div class="badge-row">
+              <span class="badge b-critical">Missing → all agent SQL queries fail immediately</span>
+              <span class="badge b-green">Rebuild with <code>make seed</code></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         INFRA
+    ═════════════════════════════════ -->
+    <div class="section" id="infra">
+      <h2><span class="section-num">13 — Infrastructure</span>Docker and Kubernetes</h2>
+
+      <div class="file-grid">
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">🐳</div>
+            <div>
+              <div class="file-card-title">docker-compose.yml</div>
+              <div class="file-card-path">infra/docker/docker-compose.yml</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Starts all three services together: backend (port 8000), Streamlit frontend (port 8501), MLflow (port 5000). Each service gets environment variables from <code>.env</code>. Single command to run everything: <code>docker compose -f infra/docker/docker-compose.yml up</code>.</p>
+            <div class="badge-row"><span class="badge b-optional">Convenience only — services can be started individually</span></div>
+          </div>
+        </div>
+
+        <div class="file-card">
+          <div class="file-card-head">
+            <div class="file-icon fi-cfg">☸️</div>
+            <div>
+              <div class="file-card-title">infra/k8s/ — Kubernetes manifests</div>
+              <div class="file-card-path">infra/k8s/deployments.yaml · backend-deployment.yaml · secrets.yaml</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Azure Kubernetes Service (AKS) deployment configuration. Defines replicas, resource limits, health checks (<code>backend-deployment.yaml</code>), and how API keys are injected as Kubernetes secrets (not hardcoded in manifests).</p>
+            <div class="badge-row"><span class="badge b-optional">Development only — required for Azure production deployment</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         DOCS
+    ═════════════════════════════════ -->
+    <div class="section" id="docs-html">
+      <h2><span class="section-num">14 — Docs</span>Architecture HTML documents</h2>
+      <table class="data-table">
+        <thead><tr><th>File</th><th>Purpose</th><th>Audience</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>routing-vs-isolated.html</code></td>
+            <td>9-section teardown of isolated vs routing-agent architectures. Covers memory, scaling, auth, migration roadmap.</td>
+            <td>Architects, CTOs</td>
+          </tr>
+          <tr>
+            <td><code>architecture-visual.html</code></td>
+            <td>Interactive animated SVG. Toggle between architectures; step-by-step query trace replay.</td>
+            <td>All stakeholders</td>
+          </tr>
+          <tr>
+            <td><code>production-vision.html</code></td>
+            <td>High-fidelity HTML prototype of the production unified UI with simulated responses.</td>
+            <td>Product, design</td>
+          </tr>
+          <tr>
+            <td><code>power-prompts.html</code></td>
+            <td>5 business showcase prompts + 5 engineering diagnostic prompts (injection, hallucination, latency stress, context poisoning).</td>
+            <td>Business users, QA engineers</td>
+          </tr>
+          <tr>
+            <td><code>system-blueprint.html</code></td>
+            <td>This document — component-by-component builder reference.</td>
+            <td>Engineers, new joiners</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════
+         HOW TO START
+    ═════════════════════════════════ -->
+    <div class="section" id="how-to-start">
+      <h2><span class="section-num">15 — Setup</span>How to start everything locally</h2>
+
+      <div class="callout callout-amber">
+        <strong>Prerequisite:</strong> <code>.env</code> file must exist and contain a valid <code>OPENAI_API_KEY</code>. Copy <code>.env.example</code> and fill in your key.
+      </div>
+
+      <div class="callout callout-red">
+        <strong>Start order is critical — MLflow MUST start before the backend.</strong><br/>
+        <code>base_graph.py</code> calls <code>mlflow.set_experiment()</code> at module import time.
+        If MLflow is not already running when uvicorn imports the agents, the backend crashes with a
+        connection error. Always follow the sequence below.
+      </div>
+
+      <pre><span class="hl-muted"># Step 1 — MLflow (port 5000) — MUST start FIRST</span>
+cd text_to_sql_demo
+<span class="hl-green">source .venv/bin/activate</span>
+<span class="hl-green">.venv/bin/mlflow server --host 127.0.0.1 --port 5000 \
+  --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns &amp;</span>
+<span class="hl-muted"># → http://localhost:5000</span>
+
+<span class="hl-muted"># Step 2 — Backend (FastAPI + LangGraph)</span>
+<span class="hl-green">PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload \
+  --port 8000 --app-dir backend</span>
+
+<span class="hl-muted"># Step 3 — React frontend (production UI)</span>
+cd nedcard-ui
+export PATH="/opt/homebrew/bin:$PATH"   <span class="hl-muted"># macOS only</span>
+<span class="hl-green">npm run dev</span>
+<span class="hl-muted"># → http://localhost:3002</span>
+
+<span class="hl-muted"># Step 4 — Streamlit frontend (demo interface)</span>
+<span class="hl-green">make dev-frontend</span>
+<span class="hl-muted"># → http://localhost:8501</span>
+
+<span class="hl-muted"># Optional — seed the database (first time or after schema changes)</span>
+<span class="hl-green">make seed</span>
+
+<span class="hl-muted"># Optional — run evaluations (backend must be running)</span>
+<span class="hl-green">make eval</span></pre>
+
+      <div class="callout callout-red">
+        <strong>Always use the venv.</strong> The project virtual environment (<code>.venv/</code>) has all required libraries. The system Python does not.
+        Always use <code>.venv/bin/python</code>, <code>.venv/bin/streamlit</code>, <code>.venv/bin/mlflow</code>. Never use the bare <code>python</code> or <code>pip</code> without activating the venv first.
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         GLOSSARY
+    ═════════════════════════════════ -->
+    <div class="section" id="glossary">
+      <h2><span class="section-num">16 — Glossary</span>Plain-English definitions</h2>
+      <table class="data-table">
+        <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Agent</strong></td><td>An AI that takes actions (query database, call APIs) in a loop, not just generates text</td></tr>
+          <tr><td><strong>ReAct loop</strong></td><td>Reason → Act (call tool) → Observe result → Repeat if needed → Answer when done</td></tr>
+          <tr><td><strong>LangGraph</strong></td><td>Library that defines and manages the agent's decision flow as a compiled state graph</td></tr>
+          <tr><td><strong>Tool</strong></td><td>A Python function the agent can call — <code>@tool</code> decorated, shows up in OpenAI function-calling</td></tr>
+          <tr><td><strong>String marker</strong></td><td><code>__CHART__:{json}:__ENDCHART__</code> embedded in tool return string. Bypasses ContextVar copy problem. Extracted post-ainvoke by <code>extract_chart_from_messages()</code></td></tr>
+          <tr><td><strong>ContextVar</strong></td><td>Python's per-async-Task context store. Breaks in LangGraph because <code>asyncio.gather()</code> creates Tasks that each get a <em>copy</em>, not a reference</td></tr>
+          <tr><td><strong>Unified router</strong></td><td><code>/api/unified/query</code> — classifies intent, fans out to specialists, synthesises one answer</td></tr>
+          <tr><td><strong>Conversational bypass</strong></td><td>Greetings/small talk intercepted before LangGraph. Direct OpenAI call, ~50ms. <code>agent_label = null</code></td></tr>
+          <tr><td><strong>agent_label</strong></td><td>Field in <code>AgentResponse</code>. Names the specialist(s) that responded, or <code>null</code> for conversational. Controls domain badge visibility in UI</td></tr>
+          <tr><td><strong>Domain badge</strong></td><td>Coloured pill above AI responses ("Credit Intelligence", etc.). Only shown when <code>agent_label</code> is non-null</td></tr>
+          <tr><td><strong>fan-out</strong></td><td>Calling multiple agents in parallel via <code>asyncio.gather()</code> when the query spans domains</td></tr>
+          <tr><td><strong>synthesis</strong></td><td>GPT-4o call that merges multiple specialist answers into one coherent response</td></tr>
+          <tr><td><strong>createPortal</strong></td><td>React API that mounts a component at <code>document.body</code> instead of inside the parent DOM tree — bypasses overflow/z-index clipping</td></tr>
+          <tr><td><strong>readonly_engine</strong></td><td>Database connection with no write permission — used by all agent tools. Second independent safety layer against SQL injection</td></tr>
+          <tr><td><strong>inline eval</strong></td><td>Scoring that runs on every query (no extra API cost): sql_valid, sql_safe, answer_quality</td></tr>
+          <tr><td><strong>golden dataset</strong></td><td>14 handcrafted test cases with known correct answers used for batch evaluation</td></tr>
+          <tr><td><strong>LLM judge</strong></td><td>GPT-4o evaluating GPT-4o's answers for relevance and semantic similarity</td></tr>
+          <tr><td><strong>MLflow trace</strong></td><td>Flamegraph showing every step of one agent run — inputs, outputs, durations, eval scores per span</td></tr>
+          <tr><td><strong>MLflow run</strong></td><td>One entry in an experiment — aggregated metrics for one query or one eval batch</td></tr>
+          <tr><td><strong>Vite proxy</strong></td><td>Forwards <code>/api/*</code> from port 3002 to port 8000 during development — eliminates CORS issues</td></tr>
+          <tr><td><strong>Typewriter streaming</strong></td><td>Client-side UX: complete response revealed character-by-character with punctuation-aware pacing (18 ms/char; 210 ms after <code>.!?</code>; 90 ms after <code>,;:</code>; 130 ms after newlines). Implemented via recursive <code>setTimeout</code> — not <code>setInterval</code></td></tr>
+          <tr><td><strong>Progressive disclosure of agent reasoning</strong></td><td>UX pattern where the loading state narrates each internal phase of agent execution rather than showing a single spinner. Reduces perceived wait time and builds trust by showing <em>what the system is actually doing</em></td></tr>
+          <tr><td><strong>Chain-of-thought streaming UI</strong></td><td>Technical name for the staged thinking indicator — mapping internal agent steps (route → query → interpret → compose) to sequential, animated UI states visible to the user</td></tr>
+          <tr><td><strong>Staged loading indicator</strong></td><td>A loading UX where named phases replace a generic spinner. Each stage has a label, slide-in/out transition, and a domain-coloured progress bar that fills as steps advance</td></tr>
+          <tr><td><strong>Punctuation-aware typewriter</strong></td><td>Typewriter algorithm that varies delay based on punctuation: longer pauses after sentence-ending characters create natural reading rhythm mimicking human speech cadence</td></tr>
+          <tr><td><strong>userInitials prop</strong></td><td><code>MessageBubble</code> prop carrying the user's 1–2 letter initials. Renders the blue→purple gradient avatar on the right of every user message</td></tr>
+          <tr><td><strong>Hero icon glow</strong></td><td>Pulsing green ring and <code>boxShadow</code> on the empty-state logo. A <code>motion.span</code> breathes (opacity/scale) on a 3 s infinite <code>easeInOut</code> loop</td></tr>
+          <tr><td><strong>MediaRecorder</strong></td><td>Browser-native API for audio recording. Produces <code>audio/webm</code> blobs sent to Whisper</td></tr>
+          <tr><td><strong>Whisper</strong></td><td>OpenAI's speech-to-text model. Accepts audio blobs, returns transcript text</td></tr>
+          <tr><td><strong>pydantic</strong></td><td>Python library that enforces data shapes at runtime — wrong types are rejected before logic runs</td></tr>
+          <tr><td><strong>async</strong></td><td>Non-blocking code — while waiting for one DB call, the server handles other requests simultaneously</td></tr>
+          <tr><td><strong>venv</strong></td><td>Self-contained Python environment with all dependencies — lives in <code>.venv/</code></td></tr>
+          <tr><td><strong>RAG</strong></td><td>Retrieval-Augmented Generation — answer questions grounded on retrieved document chunks, not model memory</td></tr>
+          <tr><td><strong>Chunk</strong></td><td>A fixed-size text window (800 chars, 80 overlap) created by <code>chunk_text()</code> and stored as an embedding in <code>document_chunks</code></td></tr>
+          <tr><td><strong>Embedding</strong></td><td>A 1536-dim float vector (OpenAI <code>text-embedding-ada-002</code>) representing a chunk's semantic meaning. Used for cosine similarity search</td></tr>
+          <tr><td><strong>Cosine similarity</strong></td><td>Mathematical measure of angle between two vectors — 1.0 = identical meaning, 0 = unrelated. Used in <code>store.py</code> to rank chunks</td></tr>
+          <tr><td><strong>Call intelligence</strong></td><td>The <code>_CALL_ANALYSIS_SYSTEM</code> prompt persona — a call-centre assessor that generates a structured 5-section report from a Whisper transcript</td></tr>
+          <tr><td><strong>Active document</strong></td><td>The amber banner shown in ChatPage after a file upload — follow-up questions route to RAG against that specific document until the user clicks ×</td></tr>
+          <tr><td><strong>PATH A / B / C</strong></td><td>The three branches in <code>submit()</code>. A = file attached; B = active doc, no new file; C = no document context (normal agent query)</td></tr>
+          <tr><td><strong>TTS</strong></td><td>Text-to-Speech — <code>POST /api/speech/tts</code> returns an MP3 Blob played by the browser <code>Audio</code> API. Voice: Nova (OpenAI)</td></tr>
+          <tr><td><strong>activeSpeaker ref</strong></td><td>A <code>useRef&lt;HTMLAudioElement&gt;</code> holding the currently playing TTS audio element. Used to stop playback before starting a new one</td></tr>
+          <tr><td><strong>speakingId</strong></td><td>React state tracking which message is being read aloud — drives Listen/Stop button label and disabled state for other buttons</td></tr>
+          <tr><td><strong>MLflow startup order</strong></td><td><code>base_graph.py</code> calls <code>mlflow.set_experiment()</code> at import time. MLflow server must be running BEFORE the backend starts or the backend crashes on launch</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /layout -->
+
+<button class="print-btn no-print" onclick="window.print()">⬇ Save as PDF</button>
+
+</body>
+</html>

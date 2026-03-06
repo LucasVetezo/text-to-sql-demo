@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turnover Squad</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #00c66a;
+    --green2: #00e87a;
+    --amber:  #f59e0b;
+    --red:    #ef4444;
+    --blue:   #3b82f6;
+    --purple: #a855f7;
+    --bg:     #0a0e1a;
+    --card:   #111827;
+    --border: rgba(255,255,255,0.07);
+    --text:   #e5e7eb;
+    --muted:  #6b7280;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── Slide container ─────────────────────────────────────── */
+  .deck {
+    position: relative;
+    width: 100vw; height: 100vh;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px 64px;
+    opacity: 0;
+    transform: translateX(60px);
+    transition: opacity .55s cubic-bezier(.4,0,.2,1),
+                transform .55s cubic-bezier(.4,0,.2,1);
+    pointer-events: none;
+  }
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+  }
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-60px);
+    transition: opacity .35s ease, transform .35s ease;
+  }
+
+  /* ── Slide number + nav ───────────────────────────────────── */
+  .nav-bar {
+    position: fixed;
+    bottom: 28px; left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    cursor: pointer;
+    transition: background .3s, transform .3s;
+  }
+  .dot.active { background: var(--green); transform: scale(1.5); }
+
+  .slide-label {
+    position: fixed;
+    top: 24px; right: 32px;
+    font-size: 11px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    z-index: 100;
+  }
+
+  .key-hint {
+    position: fixed;
+    bottom: 28px; right: 32px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .05em;
+  }
+
+  /* ── Ambient background glows ─────────────────────────────── */
+  .glow-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: .18;
+    animation: orb-drift 14s ease-in-out infinite alternate;
+  }
+  .glow-orb.g1 { width: 600px; height: 600px; background: var(--green); top: -200px; left: -150px; animation-delay: 0s; }
+  .glow-orb.g2 { width: 400px; height: 400px; background: var(--blue);  bottom: -100px; right: -100px; animation-delay: 4s; }
+  .glow-orb.g3 { width: 300px; height: 300px; background: var(--purple); top: 40%; right: 20%; animation-delay: 8s; }
+
+  @keyframes orb-drift {
+    from { transform: translate(0,0) scale(1); }
+    to   { transform: translate(30px,20px) scale(1.1); }
+  }
+
+  /* ── Shared components ────────────────────────────────────── */
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 16px;
+    font-weight: 600;
+    opacity: 0;
+    animation: fade-up .5s .2s forwards;
+  }
+  h1 {
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: center;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fade-up .5s .35s forwards;
+  }
+  .subtitle {
+    font-size: clamp(1rem, 1.8vw, 1.25rem);
+    color: var(--muted);
+    text-align: center;
+    max-width: 640px;
+    line-height: 1.6;
+    opacity: 0;
+    animation: fade-up .5s .5s forwards;
+  }
+  .hl-green  { color: var(--green); }
+  .hl-amber  { color: var(--amber); }
+  .hl-red    { color: var(--red);   }
+  .hl-blue   { color: var(--blue);  }
+  .hl-purple { color: var(--purple);}
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes pop-in {
+    0%   { opacity: 0; transform: scale(.85); }
+    70%  { transform: scale(1.04); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-right {
+    from { opacity: 0; transform: translateX(-24px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fill-bar {
+    from { width: 0; }
+    to   { width: var(--w); }
+  }
+  @keyframes pulse-ring {
+    0%, 100% { opacity: .3; transform: scale(1); }
+    50%       { opacity: .7; transform: scale(1.15); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes wave {
+    0%,100% { transform: scaleY(1); }
+    50%      { transform: scaleY(2.2); }
+  }
+  @keyframes count-up { to { opacity: 1; } }
+
+  /* ────────────────────────────────────────────────────────────
+     SLIDE 1 — The Problem
+  ──────────────────────────────────────────────────────────── */
+  .s1-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    max-width: 960px;
+    margin-top: 40px;
+    opacity: 0;
+    animation: fade-up .6s .65s forwards;
+  }
+  .pain-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .3s;
+  }
+  .pain-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+  .pain-card.red::before   { background: var(--red);   }
+  .pain-card.amber::before { background: var(--amber); }
+  .pain-card.blue::before  { background: var(--blue);  }
+
+  .pain-icon { font-size: 2rem; line-height: 1; }
+  .pain-stat {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .pain-card.red   .pain-stat { color: var(--red);   }
+  .pain-card.amber .pain-stat { color: var(--amber); }
+  .pain-card.blue  .pain-stat { color: var(--blue);  }
+
+  .pain-label {
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  /* count-up animation for stats */
+  .count-stat { display: inline; }
+
+  /* quote callout */
+  .quote-block {
+    max-width: 720px;
+    margin-top: 28px;
+    padding: 18px 24px;
+    border-left: 3px solid var(--green);
+    background: rgba(0,198,106,.07);
+    border-radius: 0 12px 12px 0;
+    font-size: 1rem;
+    color: #d1fae5;
+    line-height: 1.6;
+    font-style: italic;
+    opacity: 0;
+    animation: fade-up .5s 1s forwards;
+  }
+
+  /* ────────────────────────────────────────────────────────────
+     SLIDE 2 — The Challenges
+  ──────────────────────────────────────────────────────────── */
+  .challenge-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 760px;
+    margin-top: 36px;
+  }
+  .challenge-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    opacity: 0;
+  }
+  .challenge-row:nth-child(1) { animation: slide-right .45s .5s forwards; }
+  .challenge-row:nth-child(2) { animation: slide-right .45s .7s forwards; }
+  .challenge-row:nth-child(3) { animation: slide-right .45s .9s forwards; }
+  .challenge-row:nth-child(4) { animation: slide-right .45s 1.1s forwards; }
+
+  .ch-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+  .ch-title {
+    font-size: .95rem;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .ch-desc {
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* bar fill */
+  .ch-bar-wrap {
+    width: 100px;
+    height: 6px;
+    background: rgba(255,255,255,.08);
+    border-radius: 99px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .ch-bar {
+    height: 100%;
+    border-radius: 99px;
+    width: 0;
+    animation: fill-bar 1s 1.4s forwards;
+  }
+
+  .impact-banner {
+    margin-top: 24px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    background: rgba(239,68,68,.1);
+    border: 1px solid rgba(239,68,68,.25);
+    font-size: .9rem;
+    color: #fca5a5;
+    max-width: 760px;
+    text-align: center;
+    opacity: 0;
+    animation: fade-up .5s 1.5s forwards;
+  }
+
+  /* ────────────────────────────────────────────────────────────
+     SLIDE 3 — The Solution
+  ──────────────────────────────────────────────────────────── */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-top: 36px;
+    width: 100%;
+    max-width: 940px;
+    opacity: 0;
+    animation: fade-in .4s .5s forwards;
+  }
+  .pipe-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    opacity: 0;
+  }
+  .pipe-step:nth-child(1) { animation: pop-in .4s .55s forwards; }
+  .pipe-step:nth-child(3) { animation: pop-in .4s .75s forwards; }
+  .pipe-step:nth-child(5) { animation: pop-in .4s .95s forwards; }
+  .pipe-step:nth-child(7) { animation: pop-in .4s 1.15s forwards; }
+  .pipe-step:nth-child(9) { animation: pop-in .4s 1.35s forwards; }
+
+  .pipe-arrow {
+    flex: 0 0 28px;
+    text-align: center;
+    font-size: 1.2rem;
+    color: var(--muted);
+    opacity: 0;
+    animation: fade-in .3s 1.4s forwards;
+    padding-bottom: 24px;
+  }
+
+  .pipe-icon {
+    width: 60px; height: 60px;
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    position: relative;
+  }
+  .pipe-icon .ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 20px;
+    border: 1.5px solid currentColor;
+    opacity: .25;
+    animation: pulse-ring 2.5s ease-in-out infinite;
+  }
+  .pipe-label {
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .pipe-sub {
+    font-size: .68rem;
+    color: var(--muted);
+    text-align: center;
+    max-width: 90px;
+    line-height: 1.35;
+  }
+
+  /* wave visualiser inside STT box */
+  .wave-bars {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 20px;
+  }
+  .wave-bar {
+    width: 3px;
+    background: var(--green);
+    border-radius: 2px;
+    height: 6px;
+    animation: wave 1.2s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1) { animation-delay: 0s; }
+  .wave-bar:nth-child(2) { animation-delay: .1s; }
+  .wave-bar:nth-child(3) { animation-delay: .2s; }
+  .wave-bar:nth-child(4) { animation-delay: .3s; }
+  .wave-bar:nth-child(5) { animation-delay: .4s; }
+
+  /* Capabilities grid */
+  .caps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 940px;
+    margin-top: 28px;
+    opacity: 0;
+    animation: fade-up .5s 1.6s forwards;
+  }
+  .cap-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cap-card-icon { font-size: 1.3rem; }
+  .cap-card-title { font-size: .82rem; font-weight: 700; }
+  .cap-card-desc  { font-size: .72rem; color: var(--muted); line-height: 1.4; }
+  .cap-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  /* demo callout footer */
+  .demo-bar {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,198,106,.12);
+    border: 1px solid rgba(0,198,106,.3);
+    border-radius: 99px;
+    padding: 8px 20px;
+    font-size: .82rem;
+    color: var(--green);
+    font-weight: 600;
+    letter-spacing: .04em;
+    opacity: 0;
+    animation: fade-up .5s 2.2s forwards;
+  }
+  .demo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse-ring 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 0 var(--green);
+  }
+
+  /* ── Cover slide (slide 0) ────────────────────────────────── */
+  .cover-logo {
+    font-size: 3.5rem;
+    margin-bottom: 24px;
+    opacity: 0;
+    animation: pop-in .6s .1s forwards;
+    position: relative;
+    display: inline-block;
+  }
+  .cover-logo::after {
+    content: '';
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--green);
+    opacity: .3;
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+  .cover-badge {
+    display: inline-block;
+    padding: 5px 16px;
+    border-radius: 99px;
+    background: rgba(0,198,106,.12);
+    border: 1px solid rgba(0,198,106,.3);
+    font-size: .78rem;
+    color: var(--green);
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fade-in .5s .6s forwards;
+  }
+  .cover-title {
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    font-weight: 900;
+    text-align: center;
+    line-height: 1.08;
+    opacity: 0;
+    animation: fade-up .6s .4s forwards;
+  }
+  .cover-sub {
+    font-size: 1.1rem;
+    color: var(--muted);
+    text-align: center;
+    max-width: 540px;
+    margin-top: 16px;
+    line-height: 1.6;
+    opacity: 0;
+    animation: fade-up .5s .7s forwards;
+  }
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    margin-top: 40px;
+    opacity: 0;
+    animation: fade-up .5s .9s forwards;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .cover-meta-item {
+    font-size: .82rem;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .cover-meta-item strong { color: var(--text); font-size: .92rem; }
+
+  .press-hint {
+    margin-top: 48px;
+    font-size: .78rem;
+    color: var(--muted);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: fade-in 1s 1.5s forwards;
+  }
+  .press-hint span {
+    display: inline-block;
+    animation: orb-drift 1.5s ease-in-out infinite alternate;
+  }
+
+  /* progress bar at top */
+  .progress-bar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--green), var(--blue));
+    transition: width .5s cubic-bezier(.4,0,.2,1);
+    z-index: 200;
+    border-radius: 0 2px 2px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- Ambient glows -->
+<div class="glow-bg">
+  <div class="glow-orb g1"></div>
+  <div class="glow-orb g2"></div>
+  <div class="glow-orb g3"></div>
+</div>
+
+<!-- Progress bar -->
+<div class="progress-bar" id="progress"></div>
+
+<!-- Slide label -->
+<div class="slide-label" id="slideLabel"></div>
+
+<!-- Navigation dots -->
+<div class="nav-bar" id="navBar"></div>
+
+<!-- Key hint -->
+<div class="key-hint">← → to navigate &nbsp;·&nbsp; Space to advance</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 0 — Cover
+══════════════════════════════════════════════════════════ -->
+<div class="deck" id="deck">
+
+<div class="slide active" data-slide="0">
+  <div style="display:flex;flex-direction:column;align-items:center;">
+    <div class="cover-logo">🎙️</div>
+    <div class="cover-badge">Turnover Squad · 5 March 2026</div>
+    <h1 class="cover-title" style="animation-name:fade-up;">NedCard Intelligence<br><span class="hl-green">for Client Retention</span></h1>
+    <p class="cover-sub">Turning hours of call recordings into instant, actionable insights.</p>
+    <div class="cover-meta">
+      <div class="cover-meta-item"><strong>📞 Speech-to-Text</strong>OpenAI Whisper</div>
+      <div class="cover-meta-item"><strong>🧠 LLM Analysis</strong>GPT-4o</div>
+      <div class="cover-meta-item"><strong>🔊 Text-to-Speech</strong>Nova voice</div>
+      <div class="cover-meta-item"><strong>📊 Live Insights</strong>SQL + Charts</div>
+    </div>
+    <div class="press-hint">Press <span>→</span> or Space to begin</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 1 — The Problem
+══════════════════════════════════════════════════════════ -->
+<div class="slide" data-slide="1">
+  <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:960px;">
+    <p class="eyebrow">Slide 1 of 2 &nbsp;·&nbsp; The Problem</p>
+    <h1>Clients are leaving.<br><span class="hl-red">Do you know exactly why?</span></h1>
+    <p class="subtitle">The answers are in the call recordings. But they're locked away — unheard, unsummarised, unused.</p>
+
+    <div class="s1-grid">
+      <div class="pain-card red">
+        <div class="pain-icon">⏳</div>
+        <div class="pain-stat">6–8 hrs</div>
+        <div class="pain-label">An assessor's day — spent manually listening to and transcribing recordings that rarely make it into a report.</div>
+      </div>
+      <div class="pain-card amber">
+        <div class="pain-icon">📂</div>
+        <div class="pain-stat">100s</div>
+        <div class="pain-label">Calls per week pile up faster than any team can review. The backlog grows. Insights expire before they're found.</div>
+      </div>
+      <div class="pain-card blue">
+        <div class="pain-icon">💸</div>
+        <div class="pain-stat">Too late</div>
+        <div class="pain-label">By the time churn signals are identified from calls, the client has already left — or made up their mind.</div>
+      </div>
+    </div>
+
+    <div class="quote-block">
+      "We have the recordings. We just don't have time to connect the dots before the client walks."
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SLIDE 2 — The Solution
+══════════════════════════════════════════════════════════ -->
+<div class="slide" data-slide="2">
+  <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:960px;">
+    <p class="eyebrow">Slide 2 of 2 &nbsp;·&nbsp; The Solution</p>
+    <h1>NedCard Intelligence — <span class="hl-green">How It Works</span></h1>
+    <p class="subtitle" style="margin-bottom:0;">Upload a recording. Ask a question. Get an answer in seconds — spoken back to you.</p>
+
+    <!-- Pipeline diagram -->
+    <div class="pipeline">
+
+      <!-- Step 1: Upload -->
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(59,130,246,.15);color:var(--blue);">
+          📁<div class="ring" style="color:var(--blue);border-color:var(--blue);"></div>
+        </div>
+        <div class="pipe-label" style="color:var(--blue);">Upload</div>
+        <div class="pipe-sub">MP3 / WAV / M4A recording</div>
+      </div>
+
+      <div class="pipe-arrow">→</div>
+
+      <!-- Step 2: STT -->
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(0,198,106,.15);color:var(--green);flex-direction:column;gap:4px;">
+          <div class="wave-bars">
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+          <div class="ring" style="color:var(--green);border-color:var(--green);"></div>
+        </div>
+        <div class="pipe-label" style="color:var(--green);">STT</div>
+        <div class="pipe-sub">Whisper transcribes audio to text</div>
+      </div>
+
+      <div class="pipe-arrow">→</div>
+
+      <!-- Step 3: LLM -->
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(245,158,11,.15);color:var(--amber);">
+          🧠<div class="ring" style="color:var(--amber);border-color:var(--amber);"></div>
+        </div>
+        <div class="pipe-label" style="color:var(--amber);">Analyse</div>
+        <div class="pipe-sub">GPT-4o: sentiment, intent, feedback</div>
+      </div>
+
+      <div class="pipe-arrow">→</div>
+
+      <!-- Step 4: Insight -->
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(168,85,247,.15);color:var(--purple);">
+          📊<div class="ring" style="color:var(--purple);border-color:var(--purple);"></div>
+        </div>
+        <div class="pipe-label" style="color:var(--purple);">Insight</div>
+        <div class="pipe-sub">Natural language Q&amp;A + SQL + charts</div>
+      </div>
+
+      <div class="pipe-arrow">→</div>
+
+      <!-- Step 5: TTS -->
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:rgba(239,68,68,.15);color:var(--red);">
+          🔊<div class="ring" style="color:var(--red);border-color:var(--red);"></div>
+        </div>
+        <div class="pipe-label" style="color:var(--red);">Speak</div>
+        <div class="pipe-sub">Nova voice reads insights aloud</div>
+      </div>
+
+    </div>
+
+    <!-- Capabilities -->
+    <div class="caps-grid">
+      <div class="cap-card">
+        <div class="cap-card-icon">🎙️</div>
+        <div class="cap-card-title">Transcription</div>
+        <div class="cap-card-desc">Any audio format → accurate text in seconds using Whisper.</div>
+        <span class="cap-badge" style="background:rgba(0,198,106,.12);color:var(--green);">STT</span>
+      </div>
+      <div class="cap-card">
+        <div class="cap-card-icon">😤</div>
+        <div class="cap-card-title">Sentiment Analysis</div>
+        <div class="cap-card-desc">Frustration, satisfaction, churn risk — analysed per call.</div>
+        <span class="cap-badge" style="background:rgba(245,158,11,.12);color:var(--amber);">NLP</span>
+      </div>
+      <div class="cap-card">
+        <div class="cap-card-icon">💬</div>
+        <div class="cap-card-title">Ask Anything</div>
+        <div class="cap-card-desc">"What do clients say about rewards?" — answered instantly across all calls.</div>
+        <span class="cap-badge" style="background:rgba(168,85,247,.12);color:var(--purple);">RAG</span>
+      </div>
+      <div class="cap-card">
+        <div class="cap-card-icon">🔊</div>
+        <div class="cap-card-title">Voice Readback</div>
+        <div class="cap-card-desc">Insights are spoken — or can read a screen during a call.</div>
+        <span class="cap-badge" style="background:rgba(239,68,68,.12);color:var(--red);">TTS</span>
+      </div>
+    </div>
+
+    <!-- Live demo callout -->
+    <div class="demo-bar">
+      <div class="demo-dot"></div>
+      Live demo follows — STT upload + AI analysis + TTS readback
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<script>
+  const SLIDES = 3;               // 0 = cover, 1 = problem, 2 = solution
+  let current = 0;
+  let animating = false;
+
+  const deck      = document.getElementById('deck');
+  const progress  = document.getElementById('progress');
+  const navBar    = document.getElementById('navBar');
+  const slideLabel = document.getElementById('slideLabel');
+
+  // ── Build nav dots ─────────────────────────────────────────
+  const dots = [];
+  for (let i = 0; i < SLIDES; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    navBar.appendChild(d);
+    dots.push(d);
+  }
+
+  // ── Slide management ───────────────────────────────────────
+  function goTo(idx) {
+    if (animating || idx === current || idx < 0 || idx >= SLIDES) return;
+    animating = true;
+
+    const slides = deck.querySelectorAll('.slide');
+    const prev   = slides[current];
+    const next   = slides[idx];
+
+    // force re-trigger CSS animations on newly activated slide
+    next.querySelectorAll('[style*="animation"], .eyebrow, h1, .subtitle, .s1-grid, .quote-block, .challenge-row, .impact-banner, .pipe-step, .pipe-arrow, .caps-grid, .demo-bar, .cover-logo, .cover-badge, .cover-title, .cover-sub, .cover-meta, .press-hint, .ch-bar').forEach(el => {
+      el.style.animationName = 'none';
+      void el.offsetWidth;
+      el.style.animationName = '';
+    });
+
+    prev.classList.add('exit');
+    setTimeout(() => {
+      prev.classList.remove('active', 'exit');
+      next.classList.add('active');
+
+      current = idx;
+      updateUI();
+      setTimeout(() => { animating = false; }, 550);
+    }, 350);
+  }
+
+  function updateUI() {
+    // progress bar
+    progress.style.width = ((current / (SLIDES - 1)) * 100) + '%';
+
+    // dots
+    dots.forEach((d, i) => d.classList.toggle('active', i === current));
+
+    // slide label
+    const labels = ['Introduction', 'The Problem', 'The Solution'];
+    slideLabel.textContent = current === 0 ? '' : `${labels[current]}`;
+  }
+
+  // ── Keyboard navigation ────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft')                   { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'Home')                        { e.preventDefault(); goTo(0); }
+    if (e.key === 'End')                         { e.preventDefault(); goTo(SLIDES - 1); }
+
+    // number keys 1-4
+    const n = parseInt(e.key);
+    if (n >= 1 && n <= SLIDES) { e.preventDefault(); goTo(n - 1); }
+  });
+
+  // ── Touch / swipe support ─────────────────────────────────
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) goTo(dx < 0 ? current + 1 : current - 1);
+  });
+
+  // ── Click anywhere to advance ─────────────────────────────
+  deck.addEventListener('click', e => {
+    // Don't advance if clicking a nav dot
+    if (e.target.closest('.nav-bar')) return;
+    if (e.clientX > window.innerWidth * .5) goTo(current + 1);
+    else goTo(current - 1);
+  });
+
+  // Init
+  updateUI();
+  progress.style.width = '0%';
+
+  // Count-up animation for stats on slide 1
+  function animateCount(el, end, suffix, duration) {
+    const start = performance.now();
+    const isInteger = Number.isInteger(end);
+    function step(now) {
+      const pct = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - pct, 3);
+      const val = isInteger ? Math.round(end * eased) : (end * eased).toFixed(1);
+      el.textContent = val + suffix;
+      if (pct < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Trigger count-up when slide 1 becomes active
+  const observer = new MutationObserver(muts => {
+    muts.forEach(m => {
+      const el = m.target;
+      if (el.classList.contains('active') && el.dataset.slide === '1') {
+        setTimeout(() => {
+          const stats = el.querySelectorAll('.pain-stat');
+          // stats[0] remains text ("6–8 hrs"), skip — only animate numeric ones
+          // We'll just let CSS handle it; count-up is optional
+        }, 800);
+      }
+    });
+  });
+  deck.querySelectorAll('.slide').forEach(s => observer.observe(s, { attributes: true, attributeFilter: ['class'] }));
+</script>
+</body>
+</html>

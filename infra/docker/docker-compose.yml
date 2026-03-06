@@ -1,0 +1,107 @@
+# =============================================================================
+# Docker Compose — Local Development
+# =============================================================================
+# Usage: make dev  (or: docker compose -f infra/docker/docker-compose.yml up --build)
+#
+# Services:
+#   backend   → FastAPI  :8000 (internal only — not exposed to host directly)
+#   frontend  → Streamlit :8501 (http://localhost:8501)
+#   mlflow    → MLflow UI :5000 (http://localhost:5000)
+#   db        → PostgreSQL :5432 (staging parity only — app uses SQLite by default)
+#
+# Secret handling: OPENAI_API_KEY read from .env at project root (NEVER committed)
+# =============================================================================
+
+name: text-to-sql-demo
+
+services:
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: tsql_backend
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      - ENVIRONMENT=development
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DB_URL=sqlite+aiosqlite:////app/data/seeds/dev.db
+    volumes:
+      # Mount seeded database so backend can access data/seeds/dev.db
+      - ../../data:/app/data:ro      # read-only for backend (write happens via seed script)
+    networks:
+      - app-net
+    depends_on:
+      mlflow:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── Streamlit Frontend ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: tsql_frontend
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    networks:
+      - app-net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ── MLflow Tracking Server ───────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.20.0
+    container_name: tsql_mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - ../../mlflow:/mlflow
+    networks:
+      - app-net
+
+  # ── PostgreSQL (staging parity) ──────────────────────────────────────────
+  # Not used by default (SQLite is used in dev).
+  # To switch: update DB_URL in .env to use postgresql+asyncpg://...
+  db:
+    image: postgres:16-alpine
+    container_name: tsql_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-nedbank}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-nedbank_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-nedbankdb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-net
+    profiles:
+      - postgres   # Only starts with: docker compose --profile postgres up
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  app-net:
+    driver: bridge
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:

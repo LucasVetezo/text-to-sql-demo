@@ -1,0 +1,146 @@
+# =============================================================================
+# Azure DevOps Pipeline — text-to-sql-demo
+# =============================================================================
+# Stages: Lint → Test → Build → Push → Deploy to AKS
+# Secrets: Injected from Azure Key Vault via variable group
+#
+# Prerequisites:
+#   - Variable group "tsql-secrets" linked to Azure Key Vault
+#   - Azure Container Registry service connection: "tsql-acr-connection"
+#   - AKS service connection: "tsql-aks-connection"
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - backend/**
+      - frontend/**
+      - infra/**
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: tsql-secrets          # Links to Azure Key Vault
+  - name: ACR_REGISTRY
+    value: yourregistry.azurecr.io
+  - name: IMAGE_TAG
+    value: $(Build.BuildId)
+  - name: NAMESPACE
+    value: tsql-demo
+
+stages:
+
+  # ── Stage 1: Lint & Test ─────────────────────────────────────────────────
+  - stage: Verify
+    displayName: "Lint & Test"
+    jobs:
+      - job: LintAndTest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.11"
+
+          - script: |
+              pip install ruff pytest pytest-asyncio pytest-cov httpx
+              pip install -r backend/requirements.txt
+            displayName: "Install dependencies"
+
+          - script: |
+              ruff check backend/ data/
+            displayName: "Lint (ruff)"
+
+          - script: |
+              export DB_URL="sqlite+aiosqlite:///./test.db"
+              export OPENAI_API_KEY="sk-test-key"
+              export LANGSMITH_TRACING="false"
+              pytest backend/tests/ -v --tb=short --cov=backend/app --cov-report=xml
+            displayName: "Run tests"
+
+          - task: PublishCodeCoverageResults@2
+            inputs:
+              summaryFileLocation: coverage.xml
+
+  # ── Stage 2: Build & Push Docker Images ──────────────────────────────────
+  - stage: Build
+    displayName: "Build & Push"
+    dependsOn: Verify
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: BuildImages
+        steps:
+          - task: Docker@2
+            displayName: "Build & Push backend"
+            inputs:
+              command: buildAndPush
+              repository: tsql-backend
+              dockerfile: backend/Dockerfile
+              containerRegistry: tsql-acr-connection
+              tags: |
+                $(IMAGE_TAG)
+                latest
+
+          - task: Docker@2
+            displayName: "Build & Push frontend"
+            inputs:
+              command: buildAndPush
+              repository: tsql-frontend
+              dockerfile: frontend/Dockerfile
+              containerRegistry: tsql-acr-connection
+              tags: |
+                $(IMAGE_TAG)
+                latest
+
+  # ── Stage 3: Deploy to AKS ───────────────────────────────────────────────
+  - stage: Deploy
+    displayName: "Deploy to AKS"
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToAKS
+        environment: "production"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: KubernetesManifest@1
+                  displayName: "Create namespace"
+                  inputs:
+                    action: deploy
+                    connectionType: kubernetesServiceConnection
+                    kubernetesServiceConnection: tsql-aks-connection
+                    namespace: $(NAMESPACE)
+                    manifests: infra/k8s/secrets.yaml
+                  env:
+                    OPENAI_API_KEY: $(OPENAI_API_KEY)
+                    LANGSMITH_API_KEY: $(LANGSMITH_API_KEY)
+
+                - task: KubernetesManifest@1
+                  displayName: "Deploy all services"
+                  inputs:
+                    action: deploy
+                    connectionType: kubernetesServiceConnection
+                    kubernetesServiceConnection: tsql-aks-connection
+                    namespace: $(NAMESPACE)
+                    manifests: |
+                      infra/k8s/deployments.yaml
+                    containers: |
+                      $(ACR_REGISTRY)/tsql-backend:$(IMAGE_TAG)
+                      $(ACR_REGISTRY)/tsql-frontend:$(IMAGE_TAG)
+
+                - task: Kubernetes@1
+                  displayName: "Verify deployment"
+                  inputs:
+                    connectionType: kubernetesServiceConnection
+                    kubernetesServiceConnection: tsql-aks-connection
+                    namespace: $(NAMESPACE)
+                    command: rollout
+                    arguments: status deployment/tsql-backend deployment/tsql-frontend

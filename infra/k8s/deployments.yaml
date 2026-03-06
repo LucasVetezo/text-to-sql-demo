@@ -1,0 +1,193 @@
+# =============================================================================
+# Frontend Deployment + Service — Kubernetes (AKS)
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsql-frontend
+  namespace: tsql-demo
+  labels:
+    app: text-to-sql-demo
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: text-to-sql-demo
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: text-to-sql-demo
+        component: frontend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+      containers:
+        - name: frontend
+          image: yourregistry.azurecr.io/tsql-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          env:
+            - name: BACKEND_URL
+              value: "http://tsql-backend:8000"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 25
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 35
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tsql-frontend
+  namespace: tsql-demo
+  labels:
+    app: text-to-sql-demo
+    component: frontend
+spec:
+  selector:
+    app: text-to-sql-demo
+    component: frontend
+  ports:
+    - protocol: TCP
+      port: 8501
+      targetPort: 8501
+  type: ClusterIP
+---
+# =============================================================================
+# MLflow Deployment + Service — Kubernetes (AKS)
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tsql-mlflow
+  namespace: tsql-demo
+  labels:
+    app: text-to-sql-demo
+    component: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: text-to-sql-demo
+      component: mlflow
+  template:
+    metadata:
+      labels:
+        app: text-to-sql-demo
+        component: mlflow
+    spec:
+      containers:
+        - name: mlflow
+          image: ghcr.io/mlflow/mlflow:v2.20.0
+          command:
+            - mlflow
+            - server
+            - --host=0.0.0.0
+            - --port=5000
+            - --backend-store-uri=sqlite:////mlflow/mlflow.db
+            - --default-artifact-root=/mlflow/artifacts
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: mlflow-storage
+              mountPath: /mlflow
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: mlflow-storage
+          persistentVolumeClaim:
+            claimName: tsql-mlflow-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tsql-mlflow-pvc
+  namespace: tsql-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: managed-csi    # AKS default storage class
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tsql-mlflow
+  namespace: tsql-demo
+spec:
+  selector:
+    app: text-to-sql-demo
+    component: mlflow
+  ports:
+    - port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+# =============================================================================
+# NGINX Ingress — routes external traffic to frontend (& MLflow for admins)
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tsql-ingress
+  namespace: tsql-demo
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-prod   # TLS via cert-manager
+spec:
+  tls:
+    - hosts:
+        - demo.your-domain.com
+      secretName: tsql-tls
+  rules:
+    - host: demo.your-domain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tsql-frontend
+                port:
+                  number: 8501
+          - path: /mlflow
+            pathType: Prefix
+            backend:
+              service:
+                name: tsql-mlflow
+                port:
+                  number: 5000

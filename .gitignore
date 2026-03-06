@@ -1,0 +1,79 @@
+# =============================================================================
+# .gitignore — text_to_sql_demo
+# =============================================================================
+
+# Environment / Secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+secrets/
+secrets/*
+!secrets/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env_backup
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Databases (never commit seeded data)
+*.db
+*.sqlite
+*.sqlite3
+
+# MLflow
+mlflow/*.db
+mlflow/mlruns/
+mlruns/
+mlflow.db
+mlartifacts/
+
+# LangSmith local cache
+.langsmith/
+
+# Docker
+.dockerignore
+
+# macOS
+.DS_Store
+Thumbs.db
+
+# VS Code / IDE
+.vscode/settings.json
+.idea/
+
+# Jupyter (if any exploratory notebooks)
+.ipynb_checkpoints/
+*.ipynb
+
+# Node / React
+node_modules/
+.next/
+nedcard-ui/dist/
+nedcard-ui/.env
+nedcard-ui/.env.local
+
+# Build artefacts
+*.log

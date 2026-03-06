@@ -1,0 +1,44 @@
+# =============================================================================
+# Backend Requirements — text_to_sql_demo
+# Pinned for reproducibility (Feb 2026)
+# =============================================================================
+
+# --- Web Framework ---
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20        # Required for file uploads (Whisper)
+
+# --- Configuration ---
+pydantic==2.10.6
+pydantic-settings==2.7.1
+
+# --- Database ---
+sqlalchemy==2.0.38
+aiosqlite==0.20.0               # SQLite async driver (dev)
+asyncpg==0.30.0                 # PostgreSQL async driver (prod)
+alembic==1.14.1
+
+# --- AI / LLM ---
+openai>=2.21.0
+langchain-core>=1.2.14
+langchain-openai>=1.1.10
+langgraph>=1.0.9
+langsmith>=0.7.6
+
+# --- MLflow 3 (AI-native: LLM tracing, evaluation, prompt management) ---
+mlflow>=3.10.0
+
+# --- Structured Logging ---
+structlog==24.4.0
+
+# --- Utilities ---
+httpx==0.28.1
+pandas>=2.0.0                   # Used by eval harness + mlflow.evaluate()
+python-dotenv==1.0.1
+tenacity==9.0.0                 # Retry logic for LLM calls
+
+# --- Testing ---
+pytest==8.3.5
+pytest-asyncio==0.25.2
+httpx==0.28.1                   # TestClient uses httpx
+pytest-cov==6.0.0

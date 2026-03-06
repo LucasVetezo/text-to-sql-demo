@@ -1,0 +1,11 @@
+# =============================================================================
+# Frontend Requirements — Streamlit only
+# NOTE: Never install FastAPI or langchain in the frontend — all AI calls
+# go through the FastAPI backend via HTTP (api_client.py).
+# =============================================================================
+
+streamlit==1.42.0
+httpx==0.28.1           # Sync HTTP client for FastAPI calls (avoid asyncio in Streamlit)
+plotly==5.24.1
+pandas==2.2.3
+python-dotenv==1.0.1
