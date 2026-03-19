@@ -1,7 +1,7 @@
 # NedCard Intelligent Suite — Complete System Documentation
 
 > **Written for:** Anyone — engineering team, business users, new joiners — who wants to understand what was built, why every piece exists, and how it all fits together.
-> **Last updated:** 3 March 2026
+> **Last updated:** 17 March 2026
 > **Project location:** `/text_to_sql_demo/`
 
 ---
@@ -179,7 +179,8 @@ text_to_sql_demo/                  ← Project root
 │   │   │   ├── sentiment.py       ← POST /api/sentiment/query
 │   │   │   ├── speech.py          ← POST /api/speech/query, /api/speech/tts
 │   │   │   ├── unified.py         ← POST /api/unified/query ★ primary production endpoint
-│   │   │   └── documents.py       ← POST /api/documents/upload + /query, RAG pipeline (NEW)
+│   │   │   ├── overview.py        ← GET /api/overview — live dataset volume metrics (NEW)
+│   │   │   └── documents.py       ← POST /api/documents/upload + /query, RAG pipeline
 │   │   ├── tools/                 ← The actions agents can take
 │   │   ├── schemas/               ← Data shapes (what requests/responses look like)
 │   │   ├── db/                    ← Database connection and models
@@ -239,10 +240,10 @@ text_to_sql_demo/                  ← Project root
 │       │   ├── Sidebar.tsx        ← Navigation sidebar
 │       │   └── TypingIndicator.tsx← Three-dot loading animation
 │       └── pages/
-│           ├── LoginPage.tsx      ← Auth gate with mock login
+│           ├── LoginPage.tsx      ← Auth gate with animated floating logo + live stock-style ticker
 │           ├── ChatPage.tsx       ← PRIMARY unified chat (voice, file attach, all domains)
 │           ├── WelcomePage.tsx    ← Domain selection landing page
-│           ├── DashboardPage.tsx  ← Executive overview page
+│           ├── DashboardPage.tsx  ← Executive overview with live "At a Glance" DB metrics cards
 │           ├── CreditPage.tsx     ← Dedicated credit chat (legacy page)
 │           ├── FraudPage.tsx      ← Dedicated fraud chat (legacy page)
 │           ├── SentimentPage.tsx  ← Sentiment + live charts (legacy page)
@@ -426,6 +427,21 @@ When this `with` block exits, the entire trace (including all child spans from t
 - `GET /api/<use-case>/examples` — returns example questions for the UI
 
 They are thin wrappers — they receive the HTTP request, call `invoke_agent()`, and return the result. All the real logic is in `_agent_utils.py` and the agent itself.
+
+#### `overview.py` — Live Dashboard Metrics ★
+
+**Endpoint:** `GET /api/overview`
+
+**What it does:** Runs four read-only SQL queries against the database on every request and returns live volume counts for all four intelligence domains. The Dashboard page fetches this on mount and renders "At a Glance" cards — no static placeholders, always reflecting actual data.
+
+| Card | SQL logic |
+|---|---|
+| **Card Applications** | `COUNT(*) FROM credit_applications` |
+| **Application Fraud** | `GROUP BY fraud_flag` — confirmed vs cleared+suspected |
+| **Social Sentiment** | `GROUP BY sentiment_label` — positive / negative / neutral |
+| **Customer Experience** | `SUM(cx_score ≥ 7)` good vs `SUM(cx_score < 7)` bad |
+
+When the underlying dataset is refreshed via `seed_db.py`, the dashboard cards update automatically on the next page load.
 
 ---
 

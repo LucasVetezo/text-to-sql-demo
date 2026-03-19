@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db.session import engine, Base
-from app.routers import credit_router, documents_router, fraud_router, sentiment_router, speech_router, unified_router
+from app.routers import credit_router, documents_router, fraud_router, overview_router, realtime_router, sentiment_router, speech_router, unified_router
 
 log = structlog.get_logger(__name__)
 
@@ -85,6 +85,8 @@ def create_app() -> FastAPI:
     app.include_router(credit_router)
     app.include_router(documents_router)
     app.include_router(fraud_router)
+    app.include_router(overview_router)
+    app.include_router(realtime_router)
     app.include_router(sentiment_router)
     app.include_router(speech_router)
     app.include_router(unified_router)

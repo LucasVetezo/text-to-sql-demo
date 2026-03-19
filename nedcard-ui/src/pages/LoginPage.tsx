@@ -1,9 +1,17 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Mail, Lock, ChevronRight, Eye, EyeOff, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import clsx from 'clsx'
+
+// ── Simulated stock-market indices for the 4 AI domains ─────────────────
+const TICKER_DOMAINS = [
+  { label: 'Credit Risk',      abbr: 'CRI', base: 127.43, change: +1.24, color: '#00c66a' },
+  { label: 'Fraud Detection',  abbr: 'FDX', base:  98.71, change: -0.83, color: '#ef4444' },
+  { label: 'Sentiment Index',  abbr: 'SSI', base:  84.12, change: +2.07, color: '#3b82f6' },
+  { label: 'CX Insights',      abbr: 'CXI', base: 156.88, change: +0.51, color: '#a855f7' },
+]
 
 const ROLES = [
   { value: 'analyst',   label: 'Data Analyst' },
@@ -15,6 +23,27 @@ const ROLES = [
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  // Live ticker values — update slightly every 2 s to mimic a live feed
+  const [tickerVals, setTickerVals] = useState(
+    TICKER_DOMAINS.map(d => ({ val: d.base, chg: d.change }))
+  )
+  const tickerRef = useRef(tickerVals)
+  tickerRef.current = tickerVals
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTickerVals(prev =>
+        prev.map((t, i) => {
+          const nudge = (Math.random() - 0.48) * 0.15
+          const newVal = Math.max(1, t.val + nudge)
+          const newChg = parseFloat((t.chg + (Math.random() - 0.48) * 0.04).toFixed(2))
+          return { val: parseFloat(newVal.toFixed(2)), chg: newChg }
+        })
+      )
+    }, 1800)
+    return () => clearInterval(id)
+  }, [])
 
   const [name,     setName]     = useState('')
   const [email,    setEmail]    = useState('')
@@ -69,21 +98,66 @@ export default function LoginPage() {
 
         {/* Centre: animated ring + tagline */}
         <div className="relative z-10 flex flex-col items-center gap-14">
-          {/* Pulsing ring */}
-          <div className="relative flex items-center justify-center animate-ring-pulse"
-               style={{ width: 260, height: 260, borderRadius: '50%',
-                        border: '1px solid rgba(0,198,106,0.12)',
-                        background: 'radial-gradient(circle,rgba(0,198,106,0.10) 0%,rgba(0,123,64,0.04) 50%,transparent 70%)' }}>
-            <div style={{ width: 200, height: 200, borderRadius: '50%',
-                          border: '1px solid rgba(0,198,106,0.18)',
-                          background: 'radial-gradient(circle,rgba(0,198,106,0.15) 0%,transparent 70%)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <motion.img
-                src="/logo1.png"
+          {/* Cog engine ring — static logo, animated rings */}
+          <div className="relative flex items-center justify-center"
+               style={{ width: 420, height: 420 }}>
+
+            {/* ── Outer cog teeth — rotate CW (12 s) ── */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 12, ease: 'linear', repeat: Infinity }}
+              style={{
+                position: 'absolute', width: 420, height: 420, borderRadius: '50%',
+                background: 'repeating-conic-gradient(rgba(0,198,106,0.55) 0deg 6deg, transparent 6deg 22deg)',
+                maskImage:         'radial-gradient(circle at center, transparent 190px, black 196px, black 210px)',
+                WebkitMaskImage:   'radial-gradient(circle at center, transparent 190px, black 196px, black 210px)',
+              }}
+            />
+
+            {/* ── Sweeping bright arc — CW fast (5 s) — the engine ignition flash ── */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 5, ease: 'linear', repeat: Infinity }}
+              style={{
+                position: 'absolute', width: 432, height: 432, borderRadius: '50%',
+                background: 'conic-gradient(from 0deg, transparent 0deg, rgba(0,198,106,0.15) 25deg, rgba(0,198,106,0.85) 42deg, rgba(0,255,140,1) 50deg, rgba(0,198,106,0.85) 58deg, rgba(0,198,106,0.15) 75deg, transparent 105deg, transparent 360deg)',
+                maskImage:         'radial-gradient(circle at center, transparent 189px, black 196px, black 220px)',
+                WebkitMaskImage:   'radial-gradient(circle at center, transparent 189px, black 196px, black 220px)',
+                filter: 'blur(1.5px)',
+              }}
+            />
+
+            {/* ── Inner cog teeth — rotate CCW (20 s) — counter-gear feel ── */}
+            <motion.div
+              animate={{ rotate: -360 }}
+              transition={{ duration: 20, ease: 'linear', repeat: Infinity }}
+              style={{
+                position: 'absolute', width: 370, height: 370, borderRadius: '50%',
+                background: 'repeating-conic-gradient(rgba(0,198,106,0.30) 0deg 4deg, transparent 4deg 18deg)',
+                maskImage:         'radial-gradient(circle at center, transparent 166px, black 172px, black 185px)',
+                WebkitMaskImage:   'radial-gradient(circle at center, transparent 166px, black 172px, black 185px)',
+              }}
+            />
+
+            {/* ── Ambient radial glow behind the logo ── */}
+            <div style={{
+              position: 'absolute', width: 380, height: 380, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,198,106,0.14) 0%, rgba(0,123,64,0.05) 55%, transparent 75%)',
+              pointerEvents: 'none',
+            }} />
+
+            {/* ── Logo — perfectly static ── */}
+            <div style={{
+              width: 360, height: 360, borderRadius: '50%',
+              overflow: 'hidden',
+              border: '1px solid rgba(0,198,106,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'relative', zIndex: 1,
+            }}>
+              <img
+                src="/logo5.png"
                 alt="NedCard AI"
-                style={{ width: 200, height: 200, objectFit: 'contain' }}
-                animate={{ opacity: [0.65, 1, 0.65] }}
-                transition={{ duration: 3.5, ease: 'easeInOut', repeat: Infinity, repeatType: 'loop' }}
+                style={{ width: 360, height: 360, objectFit: 'cover', borderRadius: '50%' }}
               />
             </div>
           </div>
@@ -100,11 +174,44 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Bottom: capability pills */}
-        <div className="relative z-10 flex flex-wrap gap-2">
-          {['Credit Risk','Fraud Detection','Social Sentiment','CX Insights'].map(t => (
-            <span key={t} className="tag-pill">{t}</span>
-          ))}
+        {/* Bottom: live stock-ticker strip ─────────────────── */}
+        <div className="relative z-10 w-full overflow-hidden" style={{ maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)' }}>
+          {/* Duplicate array for seamless loop */}
+          <motion.div
+            className="flex gap-3 w-max"
+            animate={{ x: ['0%', '-50%'] }}
+            transition={{ duration: 18, ease: 'linear', repeat: Infinity, repeatType: 'loop' }}
+          >
+            {[...TICKER_DOMAINS, ...TICKER_DOMAINS].map((d, i) => {
+              const tv = tickerVals[i % TICKER_DOMAINS.length]
+              const up = tv.chg >= 0
+              return (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl shrink-0"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+                >
+                  {/* Accent bar */}
+                  <div className="w-0.5 h-7 rounded-full" style={{ background: d.color }} />
+                  <div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[10px] font-black tracking-widest" style={{ color: d.color }}>{d.abbr}</span>
+                      <span className="text-white text-xs font-bold tabular-nums">{tv.val.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="text-[9px]" style={{ color: up ? '#00c66a' : '#ef4444' }}>
+                        {up ? '▲' : '▼'}
+                      </span>
+                      <span className="text-[10px] font-semibold tabular-nums" style={{ color: up ? '#00c66a' : '#ef4444' }}>
+                        {up ? '+' : ''}{tv.chg.toFixed(2)}%
+                      </span>
+                      <span className="text-[9px] text-ned-muted ml-1">{d.label}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </motion.div>
         </div>
       </div>
 

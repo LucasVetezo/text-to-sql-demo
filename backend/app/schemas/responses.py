@@ -30,6 +30,10 @@ class AgentRequest(BaseModel):
     session_id: str | None = Field(
         default=None, description="Optional session ID for trace grouping"
     )
+    history: list[dict] | None = Field(
+        default=None,
+        description="Prior turns: [{role: 'user'|'assistant', content: str}, ...]"
+    )
 
 
 class AgentResponse(BaseModel):

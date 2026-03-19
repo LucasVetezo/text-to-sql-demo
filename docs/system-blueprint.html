@@ -393,7 +393,7 @@
     Written for engineers, architects, and anyone building on top of this system.
   </p>
   <div class="cover-meta">
-    <div class="cover-meta-item"><strong>3 March 2026</strong>Last updated</div>
+    <div class="cover-meta-item"><strong>17 March 2026</strong>Last updated</div>
     <div class="cover-meta-item"><strong>FastAPI + LangGraph</strong>Backend runtime</div>
     <div class="cover-meta-item"><strong>React 18 + TypeScript</strong>Production frontend</div>
     <div class="cover-meta-item"><strong>Streamlit</strong>Rapid prototype frontend</div>
@@ -401,6 +401,7 @@
     <div class="cover-meta-item"><strong>MLflow 3</strong>Observability</div>
     <div class="cover-meta-item"><strong>RAG + Whisper Pipeline</strong>Document &amp; audio intelligence</div>
     <div class="cover-meta-item"><strong>TTS (Nova voice)</strong>AI speech readback</div>
+    <div class="cover-meta-item"><strong>gpt-4o-realtime-preview</strong>S2S realtime voice agent</div>
   </div>
 </div>
 
@@ -441,6 +442,7 @@
       <a href="#be-unified" class="nav-link"><code>unified.py</code> ★</a>
       <a href="#be-domain-routers" class="nav-link">Domain routers</a>
       <a href="#be-schemas" class="nav-link"><code>responses.py</code></a>
+      <a href="#be-realtime" class="nav-link"><code>realtime.py</code> 🎙️</a>
     </div>
 
     <div class="nav-section">
@@ -485,6 +487,7 @@
       <a href="#ui-chatpage" class="nav-link"><code>ChatPage.tsx</code> ★</a>
       <a href="#ui-dynamicchart" class="nav-link"><code>DynamicChart.tsx</code></a>
       <a href="#ui-messagebubble" class="nav-link"><code>MessageBubble.tsx</code></a>
+      <a href="#ui-voiceoverlay" class="nav-link"><code>VoiceOverlay.tsx</code> 🎙️</a>
       <a href="#ui-vite" class="nav-link"><code>vite.config.ts</code></a>
       <a href="#ui-tailwind" class="nav-link"><code>tailwind.config.js</code></a>
     </div>
@@ -669,9 +672,11 @@ if chart_data  → &lt;DynamicChart&gt; (ABOVE message bubble)
         </tbody>
       </table>
       <div class="callout callout-amber">
-        <strong>Default fallback:</strong> Credit Intelligence is the last entry in <code>_DOMAINS</code> with pattern
-        <code>re.compile(r".*")</code>. Any query that doesn't match fraud/sentiment/speech keywords routes here.
-        Conversational queries ("Hi", "Thanks") are intercepted <em>before</em> the domain list and bypass all agents.
+        <strong>Default fallback &amp; context inheritance:</strong> Credit Intelligence is the last entry in <code>_DOMAINS</code> with pattern
+        <code>re.compile(r".*")</code>. Before falling back, the classifier calls <code>_infer_domain_from_history()</code> which scans recent
+        assistant messages for vocabulary fingerprints (e.g. <code>cx_score</code> / <code>transcript</code> → speech; <code>risk_score</code> → fraud).
+        This lets short follow-ups like <em>"give me a detailed analysis of this call"</em> or <em>"why did that happen?"</em> route correctly
+        without any domain keyword in the current query. Conversational queries ("Hi", "Thanks") are intercepted <em>before</em> the domain list and bypass all agents.
       </div>
     </div>
 
@@ -850,7 +855,7 @@ START
             </div>
           </div>
           <div class="file-card-body">
-            <p>The shared invocation function used by every router. <code>invoke_agent(graph, query, session_id, use_case)</code>: opens an MLflow root trace span, calls <code>graph.ainvoke()</code> asynchronously, measures latency, extracts the answer and SQL from the message history, scans for the <code>__CHART__</code> marker via <code>extract_chart_from_messages()</code>, computes inline eval scores, logs everything to MLflow, and returns a structured dict.</p>
+            <p>The shared invocation function used by every router. <code>invoke_agent(graph, query, session_id, use_case, history)</code>: threads prior conversation turns into LangGraph's initial state so each agent is context-aware from its first step. Opens an MLflow root trace span, calls <code>graph.ainvoke()</code> asynchronously, measures latency, extracts the answer and SQL from the message history, scans for the <code>__CHART__</code> marker via <code>extract_chart_from_messages()</code>, computes inline eval scores, logs everything to MLflow, and returns a structured dict.</p>
             <div class="badge-row">
               <span class="badge b-critical">Remove this → all routers lose agent execution + observability</span>
             </div>
@@ -936,6 +941,29 @@ START
           </div>
         </div>
 
+        <div class="file-card" id="be-overview">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">📈</div>
+            <div>
+              <div class="file-card-title">overview.py — GET /api/overview</div>
+              <div class="file-card-path">backend/app/routers/overview.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Lightweight read-only endpoint that powers the Dashboard "At a Glance" cards. Runs four parameterless SQL queries against the live database and returns volume counts for all four intelligence domains.</p>
+            <div class="badge-row"><span class="badge b-important">Remove this → Dashboard cards show &ldquo;—&rdquo; (graceful fallback, no crash)</span></div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Response field</th><th>SQL logic</th></tr></thead>
+              <tbody>
+                <tr><td><code>card_apps.total</code></td><td><code>COUNT(*) FROM credit_applications</code></td></tr>
+                <tr><td><code>fraud.confirmed / non_fraud</code></td><td><code>GROUP BY fraud_flag</code> &mdash; confirmed vs cleared+suspected</td></tr>
+                <tr><td><code>sentiment.positive / negative / neutral</code></td><td><code>GROUP BY sentiment_label</code> from <code>social_posts</code></td></tr>
+                <tr><td><code>cx.good / bad</code></td><td><code>SUM(cx_score &ge; 7)</code> vs <code>SUM(cx_score &lt; 7)</code> from <code>call_transcripts</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="file-card" id="be-schemas">
           <div class="file-card-head">
             <div class="file-icon fi-py">📐</div>
@@ -949,7 +977,17 @@ START
             <div class="badge-row">
               <span class="badge b-critical">Remove this → all endpoints fail at import time</span>
             </div>
-            <table class="data-table" style="margin-top:10px">
+            <h4 style="margin-top:12px;margin-bottom:6px">AgentRequest (inbound)</h4>
+            <table class="data-table">
+              <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>query</code></td><td>str</td><td>The user's natural language question</td></tr>
+                <tr><td><code>session_id</code></td><td>str | None</td><td>Conversation session identifier (auto-generated if absent)</td></tr>
+                <tr><td><code>history</code></td><td>list[dict] | None</td><td>Last 10 turns as <code>[{role, content}]</code>. Threaded into LangGraph initial state and used by <code>_infer_domain_from_history()</code> for context-aware routing</td></tr>
+              </tbody>
+            </table>
+            <h4 style="margin-top:14px;margin-bottom:6px">AgentResponse (outbound)</h4>
+            <table class="data-table">
               <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
               <tbody>
                 <tr><td><code>answer</code></td><td>str</td><td>The AI's natural language response</td></tr>
@@ -961,6 +999,71 @@ START
                 <tr><td><code>agent_label</code></td><td>str | None</td><td><strong>Controls domain badge.</strong> Null = conversational, badge hidden</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="file-card" id="be-realtime">
+          <div class="file-card-head">
+            <div class="file-icon fi-py">🎙️</div>
+            <div>
+              <div class="file-card-title">realtime.py — WebSocket /ws/realtime</div>
+              <div class="file-card-path">backend/app/routers/realtime.py</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Bidirectional WebSocket relay between the browser and the OpenAI Realtime API (<code>gpt-4o-realtime-preview</code>). The API key never leaves the backend. The browser speaks standard OpenAI Realtime client events; function calls are intercepted and executed server-side against SQLite.</p>
+            <div class="badge-row">
+              <span class="badge b-green">New — 17 March 2026</span>
+              <span class="badge b-important">Remove this → voice button connects but OpenAI call never fires</span>
+            </div>
+
+            <h4>SSL / TLS — macOS certifi fix</h4>
+            <p>Python on macOS does not use the system keychain, so <code>websockets.connect()</code> cannot verify <code>*.openai.com</code> by default. Fixed by building an explicit SSL context from <code>certifi</code>'s CA bundle:</p>
+<pre>ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+async with websockets.connect(_OPENAI_RT_URL, ssl=ssl_ctx, ...) as openai_ws:</pre>
+            <div class="callout callout-blue" style="margin-top:8px">
+              <strong>Without this fix</strong> the relay accepted the browser WS, then immediately died with
+              <code>SSL: CERTIFICATE_VERIFY_FAILED — unable to get local issuer certificate</code>.
+              <code>certifi</code> was already present in the venv (pulled in by <code>httpx</code>); only the SSL context wiring was needed.
+            </div>
+
+            <h4>Session configuration (_SESSION_CONFIG)</h4>
+            <p>Sent to OpenAI immediately on every new browser connection — no round-trip from the browser required.</p>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Setting</th><th>Value</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td><code>voice</code></td><td>alloy</td><td>Clear, professional South African-neutral tone</td></tr>
+                <tr><td><code>input/output_audio_format</code></td><td>pcm16</td><td>Raw PCM 16-bit, 24 kHz — matches browser AudioContext sample rate</td></tr>
+                <tr><td><code>input_audio_transcription</code></td><td>whisper-1</td><td>Converts user speech to text for the chat thread (🎙️ prefix)</td></tr>
+                <tr><td><code>turn_detection</code></td><td>server_vad (threshold 0.5, silence 600 ms)</td><td>Model decides when user has stopped speaking — no push-to-talk needed</td></tr>
+                <tr><td><code>temperature</code></td><td>0.7</td><td>Confident but not rigid</td></tr>
+                <tr><td><code>max_response_output_tokens</code></td><td>1024</td><td>Voice answers must be concise — prevents multi-minute monologues</td></tr>
+              </tbody>
+            </table>
+
+            <h4>Four SQL tools (_TOOL_SCHEMAS)</h4>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Tool name</th><th>Table queried</th></tr></thead>
+              <tbody>
+                <tr><td><code>query_credit_data</code></td><td><code>credit_applications</code></td></tr>
+                <tr><td><code>query_fraud_data</code></td><td><code>fraud_transactions</code></td></tr>
+                <tr><td><code>query_sentiment_data</code></td><td><code>social_posts</code></td></tr>
+                <tr><td><code>query_cx_data</code></td><td><code>call_transcripts</code></td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px"><code>_TOOL_TABLE_MAP</code> enforces this mapping server-side — a tool can only query its own table even if the model passes a different table name in the SQL argument.</p>
+
+            <h4>_handle_function_call() — server-side SQL execution</h4>
+            <p>Intercepts <code>response.function_call_arguments.done</code> events before they reach the browser. Calls <code>_run_sql(sql, limit=50)</code> (the same security-validated executor used by all four specialist agents), then sends:</p>
+<pre>1. conversation.item.create  ← function_call_output with JSON rows
+2. response.create           ← resumes the model so it speaks the answer</pre>
+            <p>A lightweight <code>nedcard.function_call</code> event is forwarded to the browser purely for UX — the overlay shows "Querying data…" while the SQL runs.</p>
+
+            <h4>Relay architecture</h4>
+<pre><span class="hl-muted">asyncio.gather runs two coroutines concurrently:</span>
+browser_to_openai()  → forwards all browser events to OpenAI verbatim
+openai_to_browser()  → forwards OpenAI events to browser, <span class="hl-green">except</span>
+                       function_call_arguments.done → execute SQL here</pre>
           </div>
         </div>
       </div>
@@ -1030,13 +1133,16 @@ __CHART__:{"chart_type":"bar","title":"Loan Amount by Branch",
 <span class="hl-muted">After ainvoke(), extract_chart_from_messages() scans all ToolMessages
 for the __CHART__ marker, parses the JSON, returns it as chart_data.</span></pre>
             <table class="data-table" style="margin-top:10px">
-              <thead><tr><th>Function</th><th>Role</th></tr></thead>
+              <thead><tr><th>Function</th><th>Domain</th><th>Role</th></tr></thead>
               <tbody>
-                <tr><td><code>execute_credit_sql_chart()</code></td><td>Credit SQL + embeds chart marker in return</td></tr>
-                <tr><td><code>execute_fraud_sql_chart()</code></td><td>Fraud SQL + embeds chart marker in return</td></tr>
-                <tr><td><code>_build_tool_response()</code></td><td>Assembles narrative + <code>__CHART__:{json}:__ENDCHART__</code></td></tr>
-                <tr><td><code>extract_chart_from_messages()</code></td><td>Scans LangGraph message list post-ainvoke, returns parsed dict or None</td></tr>
-                <tr><td><code>reset_chart_context()</code>, <code>pop_chart_data()</code></td><td>Backward-compat stubs — no-ops, safe to leave</td></tr>
+                <tr><td><code>execute_credit_sql_chart()</code></td><td>Credit</td><td>Queries <code>credit_applications</code>, embeds chart marker</td></tr>
+                <tr><td><code>execute_fraud_sql_chart()</code></td><td>Fraud</td><td>Queries <code>fraud_transactions</code>, embeds chart marker</td></tr>
+                <tr><td><code>execute_sentiment_sql_chart()</code></td><td>Sentiment</td><td>Queries <code>social_posts</code>, embeds chart marker; supports pivot SQL for grouped bars</td></tr>
+                <tr><td><code>execute_sentiment_sql()</code></td><td>Sentiment</td><td>Queries <code>social_posts</code>, returns plain JSON (no chart)</td></tr>
+                <tr><td><code>execute_speech_sql_chart()</code></td><td>CX &amp; Speech</td><td>Queries <code>call_transcripts</code>, embeds chart marker</td></tr>
+                <tr><td><code>execute_speech_sql()</code></td><td>CX &amp; Speech</td><td>Queries <code>call_transcripts</code>, returns plain JSON (no chart)</td></tr>
+                <tr><td><code>_build_tool_response()</code></td><td>All</td><td>Assembles narrative + <code>__CHART__:{json}:__ENDCHART__</code>; auto-detects multi-series <code>y_keys</code></td></tr>
+                <tr><td><code>extract_chart_from_messages()</code></td><td>All</td><td>Scans LangGraph message list post-ainvoke, returns parsed dict or None</td></tr>
               </tbody>
             </table>
           </div>
@@ -1393,7 +1499,7 @@ Documents    (.pdf/.txt/.csv etc.) → <span class="hl-amber">50 MB hard cap</sp
     <div class="section" id="ui-main">
       <h2><span class="section-num">10 — React Frontend</span>NedCard UI — production interface</h2>
 
-      <p>React 18 + TypeScript application, port 3002 via Vite. Tailwind CSS with custom <code>ned-*</code> design tokens. Framer Motion for animations. Recharts for SVG charts. Axios for HTTP. Browser MediaRecorder API for voice recording.</p>
+      <p>React 18 + TypeScript application, port 3002 via Vite. Tailwind CSS with custom <code>ned-*</code> design tokens. Framer Motion for animations. Recharts for SVG charts. Axios for HTTP. Browser MediaRecorder API for voice recording. WebSocket connection to the realtime relay for S2S voice.</p>
 
       <div class="file-grid">
 
@@ -1495,6 +1601,50 @@ Documents    (.pdf/.txt/.csv etc.) → <span class="hl-amber">50 MB hard cap</sp
               <span class="badge b-critical">Remove this → ChatPage loses history between renders</span>
               <span class="badge b-blue">useRef design = zero re-render cost on writes</span>
             </div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-loginpage">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">🔑</div>
+            <div>
+              <div class="file-card-title">pages/LoginPage.tsx — Auth gate + animated landing</div>
+              <div class="file-card-path">nedcard-ui/src/pages/LoginPage.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The first screen a user sees. Split-panel layout: animated left panel (desktop) + login form right. Left panel features a floating logo ring and a live scrolling stock-style ticker.</p>
+            <div class="badge-row"><span class="badge b-important">Remove this → no auth gate; all routes become unprotected</span></div>
+            <h4>Floating logo ring</h4>
+            <p>Logo image (375 px) clipped to a circle via <code>overflow:hidden</code> + <code>border-radius:50%</code> + <code>objectFit:cover</code>. Wrapped in a <code>motion.div</code> that loops <code>y: [0, -16, 0]</code> on a 4 s <code>easeInOut</code> infinite cycle. Logo src served from <code>nedcard-ui/public/</code> — any new logo file must be copied there first.</p>
+            <h4>Live stock-style domain ticker</h4>
+            <p>Four domain indicators (Credit Risk · Fraud Detection · Sentiment Index · CX Insights) scroll horizontally as a seamless marquee using <code>motion.div</code> with <code>x: [&#39;0%&#39;, &#39;-50%&#39;]</code> over 18 s linear infinite. The ticker array is duplicated to fill the loop gap. Values nudge every 1800 ms via <code>setInterval</code> (±0.15 value, ±0.04 change). Up/down arrows and colour (green/red) reflect the sign of the change delta. Edge fade applied via <code>maskImage</code> linear-gradient.</p>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-dashboardpage">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">📊</div>
+            <div>
+              <div class="file-card-title">pages/DashboardPage.tsx — Executive overview with live metrics</div>
+              <div class="file-card-path">nedcard-ui/src/pages/DashboardPage.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>The landing page after login. Shows a greeting, four live "At a Glance" dataset volume cards, the four intelligence module shortcuts, and a recent activity feed.</p>
+            <div class="badge-row"><span class="badge b-important">Live cards require backend to be running — gracefully shows &ldquo;—&rdquo; if API is unreachable</span></div>
+            <h4>Live &ldquo;At a Glance&rdquo; cards</h4>
+            <p><code>useEffect</code> fetches <code>GET /api/overview</code> on mount. Four cards replace the old static KPI placeholders with real database counts:</p>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Card</th><th>What it shows</th></tr></thead>
+              <tbody>
+                <tr><td>Card Applications</td><td>Total volume from <code>credit_applications</code></td></tr>
+                <tr><td>Application Fraud</td><td>Confirmed (red) vs Non-Fraud — cleared + suspected (green)</td></tr>
+                <tr><td>Social Sentiment</td><td>Positive / Negative / Neutral three-way split from <code>social_posts</code></td></tr>
+                <tr><td>Customer Experience</td><td>Good (cx_score &ge;7, green) vs Bad (&lt;7, red) from <code>call_transcripts</code></td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px">When the dataset is refreshed (e.g. via <code>seed_db.py</code>), cards reflect new counts automatically on next page load — no code change required.</p>
           </div>
         </div>
 
@@ -1608,6 +1758,68 @@ Documents    (.pdf/.txt/.csv etc.) → <span class="hl-amber">50 MB hard cap</sp
           <div class="file-card-body">
             <p>Renders a single chat message. User messages: right-aligned with user avatar. AI messages: left-aligned with logo avatar, markdown rendering, optional SQL expandable panel, optional data table, latency + eval score badges. Accepts <code>displayContent</code> (typewriter string) and <code>isStreaming</code> flag for the cursor blink.</p>
             <div class="badge-row"><span class="badge b-critical">Remove this → no messages render in chat</span></div>
+          </div>
+        </div>
+
+        <div class="file-card" id="ui-voiceoverlay">
+          <div class="file-card-head">
+            <div class="file-icon fi-tsx">🎙️</div>
+            <div>
+              <div class="file-card-title">components/VoiceOverlay.tsx — realtime S2S voice agent</div>
+              <div class="file-card-path">nedcard-ui/src/components/VoiceOverlay.tsx</div>
+            </div>
+          </div>
+          <div class="file-card-body">
+            <p>Floating microphone button (fixed bottom-right, <code>z-50</code>) that opens a WebSocket to <code>/ws/realtime</code> on the FastAPI backend, streams PCM16 audio to <code>gpt-4o-realtime-preview</code>, plays back the model's spoken responses, and threads transcripts into the chat history via the <code>onMessage</code> prop.</p>
+            <div class="badge-row">
+              <span class="badge b-green">New — 17 March 2026</span>
+              <span class="badge b-important">Remove this → voice agent unavailable; text chat unaffected</span>
+            </div>
+
+            <h4>State machine</h4>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Status</th><th>Trigger</th><th>Visual</th></tr></thead>
+              <tbody>
+                <tr><td><code>idle</code></td><td>Component mounted / disconnected</td><td>Static mic icon</td></tr>
+                <tr><td><code>connecting</code></td><td>Mic button clicked</td><td>Spinner ring</td></tr>
+                <tr><td><code>listening</code></td><td>WS open + <code>session.created</code> received</td><td>Pulsing green ring + capture waveform bars</td></tr>
+                <tr><td><code>speaking</code></td><td><code>response.audio.delta</code> arrives</td><td>Pulsing blue ring + playback waveform bars</td></tr>
+                <tr><td><code>querying</code></td><td><code>nedcard.function_call</code> received</td><td>Amber spinner — "Querying data…"</td></tr>
+                <tr><td><code>error</code></td><td>WS error or mic permission denied</td><td>Red icon + tooltip</td></tr>
+              </tbody>
+            </table>
+
+            <h4>Audio capture pipeline</h4>
+<pre>getUserMedia({ audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true } })
+  → AudioContext(24000)
+  → ScriptProcessorNode(2048, 1, 1)   ← ~85 ms chunks
+  → floatToPcm16()                    ← Float32 → Int16
+  → arrayBufferToBase64()
+  → WS send: input_audio_buffer.append</pre>
+            <p>Mic is <strong>suppressed during AI speech</strong> (echo prevention) — <code>statusRef.current !== 'speaking'</code> gates the <code>onaudioprocess</code> callback.</p>
+
+            <h4>Audio playback pipeline</h4>
+<pre>response.audio.delta (base64 PCM16)
+  → base64ToInt16() → Float32 → AudioBuffer
+  → BufferSource.start( Math.max(ctx.currentTime + 0.01, nextPlayTimeRef.current) )
+  → nextPlayTimeRef += buffer.duration    ← gapless scheduling</pre>
+            <p><code>nextPlayTimeRef</code> ensures audio chunks are scheduled back-to-back without gaps or overlaps, even when network delivery is bursty.</p>
+
+            <h4>Waveform visualisation</h4>
+            <p>Two <code>AnalyserNode</code>s (fftSize 64) — one on the capture stream, one on the playback stream. Five bars update every <code>requestAnimationFrame</code>. The active analyser switches with <code>status</code>: capture when listening, playback when speaking.</p>
+
+            <h4>Chat thread integration</h4>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>OpenAI event</th><th>Action in chat</th></tr></thead>
+              <tbody>
+                <tr><td><code>conversation.item.input_audio_transcription.completed</code></td><td><code>onMessage('user', '🎙️ ' + transcript)</code></td></tr>
+                <tr><td><code>response.audio_transcript.done</code></td><td><code>onMessage('assistant', transcript)</code></td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px"><code>handleVoiceMessage</code> in <code>ChatPage</code> wraps each transcript into a <code>ChatMessage</code> object (with <code>crypto.randomUUID()</code> id) and appends it to <code>messages</code> state — voice and text turns share the same thread.</p>
+
+            <h4>WS URL construction</h4>
+            <p>Derived from <code>VITE_API_URL</code> environment variable: <code>API_BASE.replace(/^http/, 'ws') + '/ws/realtime'</code>. Set <code>VITE_API_URL=http://localhost:8000</code> in <code>.env</code> for local development. In production, this should point to the deployed backend host.</p>
           </div>
         </div>
 

@@ -28,12 +28,3 @@ Fix the code until the test passes. Do not ship a fix without a passing test.
 
 ### 6. Reflect on corrections
 Every time a correction is made, reflect explicitly on what went wrong and state a concrete plan to avoid the same mistake in the future.
-
----
-
-## Project Context (text_to_sql_demo)
-
-- **Stack**: FastAPI + LangGraph + SQLite backend · React/TypeScript (Vite, :3002) frontend · MLflow (:5000)
-- **Startup order**: MLflow **must** start before the backend (`mlflow.set_experiment()` is called at import time)
-- **Start all services**: `make start` · **Stop all**: `make stop-local`
-- **Backend command**: `PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload --port 8000 --app-dir backend`

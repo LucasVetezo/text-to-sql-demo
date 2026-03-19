@@ -46,6 +46,7 @@ async def invoke_agent(
     use_case: str,
     tags: list[str] | None = None,
     extra_state: dict[str, Any] | None = None,
+    history: list[dict] | None = None,
 ) -> dict[str, Any]:
     """
     Invoke a LangGraph agent with full MLflow 3 observability:
@@ -60,8 +61,14 @@ async def invoke_agent(
     _session_id = session_id or str(uuid.uuid4())
     start = time.perf_counter()
 
+    # Build message history: prior turns + current query
+    history_msgs = [
+        (m["role"], m["content"])
+        for m in (history or [])
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
     initial_state = {
-        "messages": [("user", query)],
+        "messages": [*history_msgs, ("user", query)],
         "session_id": _session_id,
         "user_query": query,
         **(extra_state or {}),

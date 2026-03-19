@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CreditCard, ShieldAlert, BarChart3, Mic, TrendingUp, TrendingDown, Minus, ArrowRight } from 'lucide-react'
+import { CreditCard, ShieldAlert, BarChart3, Mic, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const MODULES = [
@@ -46,25 +47,12 @@ const MODULES = [
   },
 ]
 
-const KPI_CARDS = [
-  { label: 'Queries today',     value: '142',    delta: '+18%',  trend: 'up',   icon: '📊' },
-  { label: 'Active sessions',   value: '7',      delta: 'live',  trend: 'flat', icon: '👥' },
-  { label: 'Avg response time', value: '1.8s',   delta: '-12%',  trend: 'up',   icon: '⚡' },
-  { label: 'CSAT score',        value: '8.4/10', delta: '+0.3',  trend: 'up',   icon: '🌟' },
-]
-
 const ACTIVITY = [
   { time: 'Just now', user: 'Analyst', action: 'queried credit applications for Q1 2026', module: 'Credit' },
   { time: '3 min ago', user: 'Agent', action: 'analysed call transcript for case #4872', module: 'CX' },
   { time: '12 min ago', user: 'Exec', action: 'reviewed sentiment trends for March 2026', module: 'Sentiment' },
   { time: '28 min ago', user: 'Analyst', action: 'flagged 14 suspicious transactions in Gauteng', module: 'Fraud' },
 ]
-
-function TrendIcon({ trend }: { trend: string }) {
-  if (trend === 'up')   return <TrendingUp className="w-3.5 h-3.5 text-ned-lite" />
-  if (trend === 'down') return <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-  return <Minus className="w-3.5 h-3.5 text-ned-muted" />
-}
 
 function fadeItem(delay: number) {
   return {
@@ -74,9 +62,30 @@ function fadeItem(delay: number) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Overview data types
+// ---------------------------------------------------------------------------
+interface OverviewData {
+  card_apps: { total: number }
+  fraud:     { confirmed: number; non_fraud: number }
+  sentiment: { positive: number; negative: number; neutral: number }
+  cx:        { good: number; bad: number }
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [overview, setOverview] = useState<OverviewData | null>(null)
+
+  useEffect(() => {
+    fetch('/api/overview')
+      .then(r => r.json())
+      .then(setOverview)
+      .catch(() => { /* fail silently — cards show dashes */ })
+  }, [])
+
+  const fmt = (n: number | undefined) =>
+    n == null ? '—' : n.toLocaleString()
 
   return (
     <div className="min-h-full px-6 py-8 max-w-6xl mx-auto">
@@ -95,24 +104,84 @@ export default function DashboardPage() {
         </p>
       </motion.div>
 
-      {/* ── KPI cards ────────────────────────────────────── */}
-      <motion.div {...fadeItem(0.08)} className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {KPI_CARDS.map(k => (
-          <div key={k.label} className="metric-card">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-lg">{k.icon}</span>
-              <div className="flex items-center gap-1">
-                <TrendIcon trend={k.trend} />
-                <span className={`text-[11px] font-semibold ${
-                  k.trend === 'up' ? 'text-ned-lite' :
-                  k.trend === 'down' ? 'text-red-400' : 'text-ned-muted'
-                }`}>{k.delta}</span>
+      {/* ── At a Glance — live DB volumes ──────────────── */}
+      <motion.div {...fadeItem(0.08)} className="mb-8">
+        <h2 className="text-white text-sm font-semibold tracking-wide uppercase mb-4">At a Glance</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+
+          {/* Card Applications */}
+          <div className="metric-card">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard className="w-4 h-4" style={{ color: '#00C66A' }} />
+              <span className="text-ned-muted text-xs font-semibold uppercase tracking-wide">Card Applications</span>
+            </div>
+            <p className="text-white text-3xl font-bold mb-1">{fmt(overview?.card_apps.total)}</p>
+            <p className="text-ned-muted text-xs">Total applications in dataset</p>
+          </div>
+
+          {/* Application Fraud */}
+          <div className="metric-card">
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldAlert className="w-4 h-4" style={{ color: '#E07060' }} />
+              <span className="text-ned-muted text-xs font-semibold uppercase tracking-wide">Application Fraud</span>
+            </div>
+            <div className="flex items-end gap-3 mb-1">
+              <div>
+                <p className="text-red-400 text-2xl font-bold">{fmt(overview?.fraud.confirmed)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Confirmed</p>
+              </div>
+              <div className="w-px h-8 bg-white/10 mb-1" />
+              <div>
+                <p className="text-ned-lite text-2xl font-bold">{fmt(overview?.fraud.non_fraud)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Non-Fraud</p>
               </div>
             </div>
-            <p className="text-white text-2xl font-bold">{k.value}</p>
-            <p className="text-ned-muted text-xs mt-0.5">{k.label}</p>
           </div>
-        ))}
+
+          {/* Social Sentiment */}
+          <div className="metric-card">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4" style={{ color: '#7EB8DF' }} />
+              <span className="text-ned-muted text-xs font-semibold uppercase tracking-wide">Social Sentiment</span>
+            </div>
+            <div className="flex items-end gap-2 mb-1">
+              <div>
+                <p className="text-ned-lite text-xl font-bold">{fmt(overview?.sentiment.positive)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Positive</p>
+              </div>
+              <div className="w-px h-7 bg-white/10 mb-1" />
+              <div>
+                <p className="text-red-400 text-xl font-bold">{fmt(overview?.sentiment.negative)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Negative</p>
+              </div>
+              <div className="w-px h-7 bg-white/10 mb-1" />
+              <div>
+                <p className="text-white/60 text-xl font-bold">{fmt(overview?.sentiment.neutral)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Neutral</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Experience */}
+          <div className="metric-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Mic className="w-4 h-4" style={{ color: '#BF9FDF' }} />
+              <span className="text-ned-muted text-xs font-semibold uppercase tracking-wide">Customer Experience</span>
+            </div>
+            <div className="flex items-end gap-3 mb-1">
+              <div>
+                <p className="text-ned-lite text-2xl font-bold">{fmt(overview?.cx.good)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Good (≥7)</p>
+              </div>
+              <div className="w-px h-8 bg-white/10 mb-1" />
+              <div>
+                <p className="text-red-400 text-2xl font-bold">{fmt(overview?.cx.bad)}</p>
+                <p className="text-ned-muted text-[10px] mt-0.5">Bad (&lt;7)</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </motion.div>
 
       {/* ── Module cards ─────────────────────────────────── */}

@@ -15,12 +15,20 @@ import { useChatHistory } from '../context/ChatHistoryContext'
 import { queryAgent, queryDocument, uploadDocument } from '../lib/api'
 import MessageBubble from '../components/MessageBubble'
 import DynamicChart from '../components/DynamicChart'
+import VoiceOverlay from '../components/VoiceOverlay'
 import type { ChatMessage } from '../types'
 
 // ── Display-only domain metadata (backend /api/unified/query handles routing) ──
 // These signals are ONLY used to pick a badge label and thinking-step text.
 // They do NOT determine which agent is called — that is the backend's job.
 interface DisplayMeta { label: string; color: string; thinkLabel: string }
+
+interface OverviewData {
+  card_apps:  { total: number }
+  fraud:      { confirmed: number; non_fraud: number }
+  sentiment:  { positive: number; negative: number; neutral: number }
+  cx:         { good: number; bad: number }
+}
 
 const DISPLAY_SIGNALS: Array<{ test: RegExp } & DisplayMeta> = [
   {
@@ -37,6 +45,8 @@ const DISPLAY_SIGNALS: Array<{ test: RegExp } & DisplayMeta> = [
     label: 'CX & Speech', color: '#BF9FDF', thinkLabel: 'Retrieving call transcripts…',
   },
 ]
+
+const fmt = (n: number | undefined) => n == null ? '—' : n.toLocaleString()
 
 function getDisplayMeta(q: string): DisplayMeta {
   const match = DISPLAY_SIGNALS.find(s => s.test.test(q))
@@ -82,6 +92,7 @@ export default function ChatPage() {
   const [activeDocId,     setActiveDocId]     = useState<number | null>(null)
   const [activeDocName,   setActiveDocName]   = useState<string | null>(null)
   const [speakingId,      setSpeakingId]      = useState<string | null>(null)
+  const [overview,        setOverview]        = useState<OverviewData | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef   = useRef<Blob[]>([])
@@ -101,6 +112,14 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading, streamedContent, chartData])
+
+  // ── Fetch At-a-Glance overview metrics
+  useEffect(() => {
+    fetch('/api/overview')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setOverview(d))
+      .catch(() => {})
+  }, [])
 
   // ── Auto-resize textarea
   useEffect(() => {
@@ -393,7 +412,14 @@ export default function ChatPage() {
     setLoading(true)
 
     try {
-      const result = await queryAgent('/api/unified/query', q, sessionId.current)
+      // Send last 10 messages (5 turns) as context so agents can follow up
+      const historySnapshot = messages.slice(-10).map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: (m.role === 'assistant'
+          ? (streamedContent[m.id] ?? m.content)
+          : m.content) as string,
+      }))
+      const result = await queryAgent('/api/unified/query', q, sessionId.current, historySnapshot)
       const id = genId()
       const aiMsg: ChatMessage = {
         id,
@@ -440,6 +466,20 @@ export default function ChatPage() {
     setDomainMeta({})
     setChartData({})
   }
+
+  /** Add a voice-agent transcript message to the chat thread. */
+  const handleVoiceMessage = useCallback(
+    (role: 'user' | 'assistant', content: string) => {
+      const msg: ChatMessage = {
+        id:        crypto.randomUUID(),
+        role,
+        content,
+        timestamp: new Date(),
+      }
+      setMessages(prev => [...prev, msg])
+    },
+    [],
+  )
 
   // Build thinking step text (override index 1 with domain-specific label)
   function currentThinkStep() {
@@ -508,60 +548,132 @@ export default function ChatPage() {
 
       {/* ── Message list ────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto chat-scroll">
-        <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
 
           {isEmpty ? (
-            /* ── Empty state ──────────── */
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-              className="flex flex-col items-center justify-center min-h-[58vh]
-                         text-center gap-5"
-            >
-              {/* Icon with pulsing glow */}
-              <div className="relative flex items-center justify-center">
-                {/* slow-pulse glow ring behind the circle */}
-                <motion.span
-                  animate={{ opacity: [0.15, 0.45, 0.15], scale: [1, 1.18, 1] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute w-36 h-36 rounded-full bg-ned-green/30 pointer-events-none"
-                />
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 3 }}
-                  transition={{ delay: 0.01, duration: 0.4 }}
-                  className="relative w-36 h-36 rounded-full bg-ned-green/10 border border-ned-green/30
-                             flex items-center justify-center overflow-hidden"
-                  style={{ boxShadow: '0 0 40px rgba(0,198,106,0.5), 0 0 12px rgba(0,198,106,0.25)' }}
-                >
-                  <img
-                    src="/logo1.png"
-                    alt="NedCard AI"
-                    className="w-40 h-40 object-contain"
-                    onError={e => {
-                      const t = e.currentTarget
-                      t.style.display = 'none'
-                      t.parentElement!.innerHTML =
-                        '<span style="font-size:28px">✦</span>'
-                    }}
-                  />
-                </motion.div>
-              </div>
+            /* ── Empty state: At-a-Glance + hero ──────────── */
+            <div className="max-w-4xl mx-auto px-4 py-8">
 
+              {/* At a Glance cards */}
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45 }}
+                className="mb-8"
               >
-                <h2 className="text-white text-[22px] font-bold mb-2 tracking-tight">
-                  What do you need to know?
-                </h2>
+                <p className="text-ned-muted text-[11px] font-semibold tracking-widest uppercase mb-3">
+                  At a Glance
+                </p>
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+
+                  {/* Card Applications */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-ned-slate/40 p-4">
+                    <p className="text-ned-muted text-[11px] font-medium uppercase tracking-wide mb-1">Card Applications</p>
+                    <p className="text-white text-3xl font-bold">{fmt(overview?.card_apps.total)}</p>
+                    <p className="text-ned-muted text-xs mt-1">Total volume</p>
+                  </div>
+
+                  {/* Fraud */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-ned-slate/40 p-4">
+                    <p className="text-ned-muted text-[11px] font-medium uppercase tracking-wide mb-2">Application Fraud</p>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="text-red-400 text-xl font-bold">{fmt(overview?.fraud.confirmed)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Confirmed</p>
+                      </div>
+                      <div className="w-px h-8 bg-white/10" />
+                      <div>
+                        <p className="text-ned-lite text-xl font-bold">{fmt(overview?.fraud.non_fraud)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Non-Fraud</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sentiment */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-ned-slate/40 p-4">
+                    <p className="text-ned-muted text-[11px] font-medium uppercase tracking-wide mb-2">Social Sentiment</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div>
+                        <p className="text-ned-lite text-lg font-bold">{fmt(overview?.sentiment.positive)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Positive</p>
+                      </div>
+                      <div className="w-px h-6 bg-white/10" />
+                      <div>
+                        <p className="text-red-400 text-lg font-bold">{fmt(overview?.sentiment.negative)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Negative</p>
+                      </div>
+                      <div className="w-px h-6 bg-white/10" />
+                      <div>
+                        <p className="text-white/60 text-lg font-bold">{fmt(overview?.sentiment.neutral)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Neutral</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Experience */}
+                  <div className="rounded-2xl border border-white/[0.08] bg-ned-slate/40 p-4">
+                    <p className="text-ned-muted text-[11px] font-medium uppercase tracking-wide mb-2">Customer Experience</p>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="text-ned-lite text-xl font-bold">{fmt(overview?.cx.good)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Good</p>
+                      </div>
+                      <div className="w-px h-8 bg-white/10" />
+                      <div>
+                        <p className="text-red-400 text-xl font-bold">{fmt(overview?.cx.bad)}</p>
+                        <p className="text-ned-muted text-[10px] mt-0.5">Bad</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
               </motion.div>
-            </motion.div>
+
+              {/* Hero */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut', delay: 0.15 }}
+                className="flex flex-col items-center justify-center text-center gap-5 py-6"
+              >
+                {/* Icon with pulsing glow */}
+                <div className="relative flex items-center justify-center">
+                  <motion.span
+                    animate={{ opacity: [0.15, 0.45, 0.15], scale: [1, 1.18, 1] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute w-36 h-36 rounded-full bg-ned-green/30 pointer-events-none"
+                  />
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.01, duration: 0.4 }}
+                    className="relative w-36 h-36 rounded-full bg-ned-green/10 border border-ned-green/30
+                               flex items-center justify-center overflow-hidden"
+                    style={{ boxShadow: '0 0 40px rgba(0,198,106,0.5), 0 0 12px rgba(0,198,106,0.25)' }}
+                  >
+                    <img
+                      src="/logo1.png"
+                      alt="NedCard AI"
+                      className="w-40 h-40 object-contain"
+                      onError={e => {
+                        const t = e.currentTarget
+                        t.style.display = 'none'
+                        t.parentElement!.innerHTML = '<span style="font-size:28px">✦</span>'
+                      }}
+                    />
+                  </motion.div>
+                </div>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                  <h2 className="text-white text-[22px] font-bold mb-2 tracking-tight">
+                    What do you need to know?
+                  </h2>
+                </motion.div>
+              </motion.div>
+
+            </div>
 
           ) : (
             /* ── Messages ──────────────── */
+            <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
             <AnimatePresence initial={false}>
               {messages.map(m => (
                 <div key={m.id}>
@@ -704,10 +816,9 @@ export default function ChatPage() {
                 )
               })()}
             </AnimatePresence>
+              <div ref={bottomRef} />
+            </div>
           )}
-
-          <div ref={bottomRef} />
-        </div>
       </div>
 
       {/* ── Input bar ───────────────────────────────────────────── */}
@@ -879,6 +990,9 @@ export default function ChatPage() {
           </p>
         </div>
       </div>
+
+      {/* ── Realtime voice agent — floats above the input bar ────────────── */}
+      <VoiceOverlay onMessage={handleVoiceMessage} />
 
     </div>
   )

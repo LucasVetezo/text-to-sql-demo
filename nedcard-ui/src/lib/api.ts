@@ -8,14 +8,21 @@ const http = axios.create({
 })
 
 // ── Shared agent query ────────────────────────────────────
+export interface HistoryMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export async function queryAgent(
   endpoint: string,
   query: string,
-  sessionId?: string
+  sessionId?: string,
+  history?: HistoryMessage[]
 ): Promise<AgentResponse> {
   const { data } = await http.post<AgentResponse>(endpoint, {
     query,
     session_id: sessionId,
+    history: history ?? [],
   })
   return data
 }

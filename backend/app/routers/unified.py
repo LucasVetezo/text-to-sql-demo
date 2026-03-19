@@ -1,10 +1,23 @@
 """
 Unified query router — /api/unified/query
 
-Classifies the user's question, fans out to the relevant specialist agent(s)
-in parallel, and synthesises a single coherent response via GPT when multiple
-domains are involved.  Returns one AgentResponse — the frontend always gets
-a single, structured answer regardless of how many agents were consulted.
+Classification pipeline
+-----------------------
+1. Regex pre-checks for strong domain signals (credit, sentiment, speech).
+2. History-aware inference: when the current query is ambiguous or a short
+   follow-up, `_infer_domain_from_history()` scans recent assistant messages
+   for vocabulary fingerprints (cx_score, transcript, risk_score, etc.) and
+   inherits the domain from the active conversation thread.  This replaces
+   brittle keyword patching for context-dependent turns like "tell me more",
+   "give me a detailed analysis of this call", "why did that happen?".
+3. Pattern-match fallback across the four specialist domains.
+4. Credit is the catch-all default when no other signal fires.
+
+Fan-out & synthesis
+-------------------
+For multi-domain queries the router calls all relevant specialist agents in
+parallel via asyncio.gather(), then synthesises a single coherent response
+through GPT.  The frontend always receives one AgentResponse.
 """
 
 import asyncio
@@ -23,7 +36,6 @@ from app.agents.sentiment_agent import sentiment_graph
 from app.agents.speech_agent import speech_graph
 from app.config import settings
 from app.routers._agent_utils import invoke_agent
-from app.routers.sentiment import _sentiment_chart_data
 from app.schemas.responses import AgentRequest, AgentResponse
 
 router = APIRouter(prefix="/api/unified", tags=["Unified Intelligence"])
@@ -89,6 +101,13 @@ _SENTIMENT_SIGNALS = re.compile(
     r"sentiment|social|twitter|linkedin|post|brand|complaint|feedback|correl|spike",
     re.I,
 )
+_SPEECH_SIGNALS = re.compile(
+    # Strong CX/speech-domain signals — prioritised over generic "sentiment" keyword.
+    r"call.?cent|call.?transcript|transcript|call.?record|cx\b|customer.?experience"
+    r"|agent.?(?:score|rating|call|perform)|sipho|nomsa|whisper|call.?analys"
+    r"|interact.{0,30}agent|agent.{0,30}interact",
+    re.I,
+)
 # Conversational / general queries — greetings, thanks, meta questions, small talk.
 # These must NOT be routed to a specialist SQL agent.
 _CONVERSATIONAL = re.compile(
@@ -121,9 +140,80 @@ _CHART_FOLLOWUP = re.compile(
 _GENERAL_DOMAIN = {"key": "general", "label": None}
 
 
-def _classify(query: str) -> list[dict]:
-    """Return list of domain dicts to consult for this query."""
-    # Short conversational input — no specialist agent needed.
+# ── Domain vocabulary fingerprints (used for history-based context inference) ──
+# Each key maps to signals that strongly suggest the assistant was in that domain.
+_DOMAIN_FINGERPRINTS: dict[str, re.Pattern] = {
+    "speech": re.compile(
+        r"call_id|transcript|cx.?score|agent.{0,20}(?:name|score|call)"
+        r"|resolution.?status|call.?(?:summary|reason|duration|centre)"
+        r"|customer.?experience|contact.?centre",
+        re.I,
+    ),
+    "fraud": re.compile(
+        r"fraud|transaction.?(?:id|amount|flag)|risk.?score|dispute|merchant",
+        re.I,
+    ),
+    "sentiment": re.compile(
+        r"social.?post|twitter|linkedin|sentiment.?(?:label|score|breakdown)"
+        r"|platform.{0,30}(?:positive|negative)|brand.?(?:sentiment|perception)",
+        re.I,
+    ),
+    "credit": re.compile(
+        r"applic(?:ation)?.?(?:id|rate|status)|credit.?score|loan.?applic"
+        r"|decline.?rate|approval.?rate",
+        re.I,
+    ),
+}
+
+
+def _infer_domain_from_history(history: list[dict]) -> str | None:
+    """
+    Scan the last few assistant messages and return the domain key whose
+    fingerprint vocabulary is most present.  Returns None if no clear signal.
+    """
+    # Only look at the most recent assistant turns (up to last 3)
+    assistant_text = " ".join(
+        m["content"]
+        for m in reversed(history)
+        if m.get("role") == "assistant" and m.get("content")
+    )[:2000]  # cap chars to keep it fast
+
+    if not assistant_text:
+        return None
+
+    scores: dict[str, int] = {}
+    for domain_key, pattern in _DOMAIN_FINGERPRINTS.items():
+        scores[domain_key] = len(pattern.findall(assistant_text))
+
+    best_key, best_score = max(scores.items(), key=lambda kv: kv[1])
+    return best_key if best_score >= 2 else None
+
+
+# A query is considered "context-dependent" (i.e. a follow-up that can't be
+# classified on its own) when it is short, contains mostly pronouns/determiners,
+# and has no strong domain keyword.
+_AMBIGUOUS_FOLLOWUP = re.compile(
+    r"^\s*(?:"
+    r"(?:i\s+want|give\s+me|show\s+me|tell\s+me|can\s+you|please)"
+    r".{0,60}"
+    r"(?:this|that|it|these|those|more|details?|analysis|breakdown|summary|report)"
+    r"|(?:expand|elaborate|drill.?down|go.?deeper|more.?detail|break.?down)"
+    r"|(?:what|why|how).{0,40}(?:this|that|it|those|these)"
+    r")\s*[?.!]*\s*$",
+    re.I,
+)
+
+
+def _classify(query: str, history: list[dict] | None = None) -> list[dict]:
+    """Return list of domain dicts to consult for this query.
+
+    Classification priority:
+    1. Conversational / trivially short → general
+    2. Query itself has unambiguous domain signals → use those
+    3. Query is ambiguous/follow-up → inherit domain from conversation history
+    4. Pattern-match fallback → credit (default)
+    """
+    # ── 1. Short conversational input — no specialist agent needed ────────────
     if _CONVERSATIONAL.match(query) or len(query.split()) <= 3 and not any(
         pat.search(query)
         for pat in (
@@ -132,22 +222,49 @@ def _classify(query: str) -> list[dict]:
     ):
         return [_GENERAL_DOMAIN]
 
-    # Chart/visual follow-up: user is interrogating existing data or an already-rendered chart.
-    # Always route to sentiment only — calling the credit SQL agent adds nothing here.
+    # ── 2. Classify from query text ───────────────────────────────────────────
+    # Chart/visual follow-up: interrogating an already-rendered chart.
     if _CHART_FOLLOWUP.search(query) and _SENTIMENT_SIGNALS.search(query):
         return [next(d for d in _DOMAINS if d["key"] == "sentiment")]
 
     has_credit    = bool(_CREDIT_SIGNALS.search(query))
     has_sentiment = bool(_SENTIMENT_SIGNALS.search(query))
+    has_speech    = bool(_SPEECH_SIGNALS.search(query))
 
-    # True cross-domain: user explicitly wants both credit DATA metrics and sentiment data
+    if has_speech:
+        speech = next(d for d in _DOMAINS if d["key"] == "speech")
+        if has_sentiment and not any(w in query.lower() for w in ("transcript", "call", "cx")):
+            sentiment = next(d for d in _DOMAINS if d["key"] == "sentiment")
+            return [speech, sentiment]
+        return [speech]
+
     if has_credit and has_sentiment:
         credit    = next(d for d in _DOMAINS if d["key"] == "credit")
         sentiment = next(d for d in _DOMAINS if d["key"] == "sentiment")
         return [credit, sentiment]
 
-    match = next((d for d in _DOMAINS if d["pattern"].search(query)), _DOMAINS[-1])
-    return [match]
+    # If any non-default domain pattern matches clearly, use it directly.
+    non_default_match = next(
+        (d for d in _DOMAINS[:-1] if d["pattern"].search(query)), None
+    )
+    if non_default_match:
+        return [non_default_match]
+
+    # ── 3. Ambiguous query — inherit domain from conversation history ──────────
+    # This handles follow-ups like "give me a detailed analysis of this call",
+    # "why did that happen?", "show me more" — intent is clear from context,
+    # not from keywords in the current message.
+    if history and (not has_credit):
+        inherited = _infer_domain_from_history(history)
+        if inherited:
+            inherited_domain = next(
+                (d for d in _DOMAINS if d["key"] == inherited), None
+            )
+            if inherited_domain:
+                return [inherited_domain]
+
+    # ── 4. Fallback: credit (default catch-all) ───────────────────────────────
+    return [_DOMAINS[-1]]
 
 
 # ── Conversational / general reply ────────────────────────────────────────────
@@ -161,12 +278,19 @@ and briefly in one or two sentences without forcing the conversation toward any 
 Do NOT mention SQL, databases, or internal tooling unless asked."""
 
 
-async def _conversational_reply(query: str) -> str:
+async def _conversational_reply(query: str, history: list[dict] | None = None) -> str:
     """Direct GPT call for greetings / meta questions — no SQL agent, no tools."""
+    # Include prior history so follow-up conversational turns aren't context-blind
+    history_msgs = [
+        {"role": m["role"], "content": m["content"]}
+        for m in (history or [])
+        if m.get("role") in ("user", "assistant") and m.get("content")
+    ]
     resp = await _openai_client.chat.completions.create(
         model=settings.openai_model,
         messages=[
             {"role": "system", "content": _GENERAL_SYSTEM},
+            *history_msgs,
             {"role": "user",   "content": query},
         ],
         temperature=0.5,
@@ -230,11 +354,11 @@ async def query_unified(request: AgentRequest) -> AgentResponse:
     """
     session_id = request.session_id or str(uuid.uuid4())
     start      = time.perf_counter()
-    domains    = _classify(request.query)
+    domains    = _classify(request.query, history=request.history)
 
     # ── Conversational shortcut — skip all specialist agents ───────────────────
     if len(domains) == 1 and domains[0]["key"] == "general":
-        answer = await _conversational_reply(request.query)
+        answer = await _conversational_reply(request.query, history=request.history)
         return AgentResponse(
             answer     = answer,
             latency_ms = round((time.perf_counter() - start) * 1000, 1),
@@ -248,6 +372,7 @@ async def query_unified(request: AgentRequest) -> AgentResponse:
             query     = request.query,
             session_id= session_id,
             use_case  = d["use_case"],
+            history   = request.history,
         )
         for d in domains
     ]
@@ -284,18 +409,9 @@ async def query_unified(request: AgentRequest) -> AgentResponse:
         final_answer = agent_results[0]["answer"]
 
     # ── Bundle chart data ──────────────────────────────────────────────────────
-    # Priority 1: chart_data produced by an agent via a chart tool (credit/fraud SQL chart)
-    # Priority 2: pre-aggregated sentiment breakdown when the sentiment domain was queried
-    #             and no agent-level chart was produced (e.g. the user just asked an overview
-    #             sentiment question without requesting a specific chart)
+    # Only attach chart_data when an agent explicitly called a chart tool.
+    # Never attach a pre-canned chart — charts are only rendered upon explicit request.
     chart_data: dict | None = agent_chart_data
-    if chart_data is None and any(d["key"] == "sentiment" for d in domains):
-        try:
-            chart_data = await _sentiment_chart_data(
-                topic=None, platform=None, sentiment=None
-            )
-        except Exception:
-            pass  # chart is non-critical; text answer is still returned
 
     latency_ms = round((time.perf_counter() - start) * 1000, 1)
 

@@ -43,6 +43,7 @@ interface GenericChartPayload {
   title: string
   x_key: string
   y_key: string
+  y_keys?: string[]   // extra series for grouped bar / multi-line
   rows: Record<string, unknown>[]
   color_key?: string
 }
@@ -107,21 +108,31 @@ function GenericTooltip({ active, payload, label }: TooltipProps) {
 // ── Chart renderers (height-aware) ────────────────────────────────────────────
 
 function BarChartView({ data, height = 220 }: { data: GenericChartPayload; height?: number }) {
+  // All series keys: primary y_key plus any extra y_keys from multi-dimension pivot
+  const allSeries = data.y_keys && data.y_keys.length > 1 ? data.y_keys : [data.y_key]
+  const isGrouped  = allSeries.length > 1
+  const bottomMargin = isGrouped ? 40 : 56
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data.rows} margin={{ top: 8, right: 16, left: 16, bottom: 56 }}>
+      <BarChart
+        data={data.rows}
+        margin={{ top: 8, right: 16, left: 16, bottom: bottomMargin }}
+        barCategoryGap={isGrouped ? '20%' : '30%'}
+        barGap={3}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
         <XAxis
           dataKey={data.x_key}
           tick={{ fill: '#6B7F72', fontSize: 11 }}
-          angle={-30}
-          textAnchor="end"
+          angle={isGrouped ? 0 : -30}
+          textAnchor={isGrouped ? 'middle' : 'end'}
           interval={0}
         >
           <Label
             value={prettyKey(data.x_key)}
             position="insideBottom"
-            offset={-44}
+            offset={isGrouped ? -28 : -44}
             style={{ fill: '#4A6055', fontSize: 10, textAnchor: 'middle' }}
           />
         </XAxis>
@@ -131,7 +142,7 @@ function BarChartView({ data, height = 220 }: { data: GenericChartPayload; heigh
           width={64}
         >
           <Label
-            value={prettyKey(data.y_key)}
+            value={isGrouped ? 'Count' : prettyKey(data.y_key)}
             angle={-90}
             position="insideLeft"
             offset={-4}
@@ -139,20 +150,34 @@ function BarChartView({ data, height = 220 }: { data: GenericChartPayload; heigh
           />
         </YAxis>
         <Tooltip content={<GenericTooltip />} />
-        <Bar dataKey={data.y_key} radius={[4, 4, 0, 0]}>
-          {data.rows.map((_, i) => (
-            <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-          ))}
-        </Bar>
+        {isGrouped && (
+          <Legend
+            wrapperStyle={{ fontSize: 11, color: '#6B7F72', paddingTop: 8 }}
+            formatter={(value) => prettyKey(value)}
+          />
+        )}
+        {isGrouped ? (
+          allSeries.map((key, idx) => (
+            <Bar key={key} dataKey={key} name={key} fill={PALETTE[idx % PALETTE.length]} radius={[3, 3, 0, 0]} />
+          ))
+        ) : (
+          <Bar dataKey={data.y_key} radius={[4, 4, 0, 0]}>
+            {data.rows.map((_, i) => (
+              <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+            ))}
+          </Bar>
+        )}
       </BarChart>
     </ResponsiveContainer>
   )
 }
 
 function LineChartView({ data, height = 200 }: { data: GenericChartPayload; height?: number }) {
+  const allSeries = data.y_keys && data.y_keys.length > 1 ? data.y_keys : [data.y_key]
+  const isMulti   = allSeries.length > 1
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data.rows} margin={{ top: 8, right: 16, left: 16, bottom: 56 }}>
+      <LineChart data={data.rows} margin={{ top: 8, right: 16, left: 16, bottom: isMulti ? 40 : 56 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
         <XAxis
           dataKey={data.x_key}
@@ -164,7 +189,7 @@ function LineChartView({ data, height = 200 }: { data: GenericChartPayload; heig
           <Label
             value={prettyKey(data.x_key)}
             position="insideBottom"
-            offset={-44}
+            offset={isMulti ? -28 : -44}
             style={{ fill: '#4A6055', fontSize: 10, textAnchor: 'middle' }}
           />
         </XAxis>
@@ -174,7 +199,7 @@ function LineChartView({ data, height = 200 }: { data: GenericChartPayload; heig
           width={64}
         >
           <Label
-            value={prettyKey(data.y_key)}
+            value={isMulti ? 'Value' : prettyKey(data.y_key)}
             angle={-90}
             position="insideLeft"
             offset={-4}
@@ -182,14 +207,24 @@ function LineChartView({ data, height = 200 }: { data: GenericChartPayload; heig
           />
         </YAxis>
         <Tooltip content={<GenericTooltip />} />
-        <Line
-          type="monotone"
-          dataKey={data.y_key}
-          stroke="#00C66A"
-          strokeWidth={2}
-          dot={{ r: 3, fill: '#00C66A' }}
-          activeDot={{ r: 5 }}
-        />
+        {isMulti && (
+          <Legend
+            wrapperStyle={{ fontSize: 11, color: '#6B7F72', paddingTop: 8 }}
+            formatter={(value) => prettyKey(value)}
+          />
+        )}
+        {allSeries.map((key, idx) => (
+          <Line
+            key={key}
+            type="monotone"
+            dataKey={key}
+            name={key}
+            stroke={PALETTE[idx % PALETTE.length]}
+            strokeWidth={2}
+            dot={{ r: 3, fill: PALETTE[idx % PALETTE.length] }}
+            activeDot={{ r: 5 }}
+          />
+        ))}
       </LineChart>
     </ResponsiveContainer>
   )
